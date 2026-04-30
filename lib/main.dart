@@ -1,11 +1,18 @@
-import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:csv/csv.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:csv/csv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   runApp(const MyApp());
 }
 
@@ -16,11 +23,16 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'GGI Holland - Stieradvies',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF00A651),
+          primary: const Color(0xFF00A651),
+        ),
         useMaterial3: true,
+        fontFamily: 'Roboto',
       ),
-      home: const StartScreen(),
+      home: const SplashScreen(),
     );
   }
 }
@@ -66,20 +78,42 @@ class KoeAdvies {
 class StorageService {
   static const String _geschiedenisKey = 'zoek_geschiedenis';
   static const String _favorietenKey = 'favorieten';
+  static const String _csvDataKey = 'opgeslagen_csv';
+  static const String _csvPadKey = 'csv_bestand_pad';
 
+  // CSV opslaan
+  static Future<void> saveCsvData(List<List<dynamic>> csvData, String bestandPad) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = csvData.map((row) => jsonEncode(row)).toList();
+    await prefs.setStringList(_csvDataKey, jsonList);
+    await prefs.setString(_csvPadKey, bestandPad);
+  }
+
+  static Future<List<List<dynamic>>?> getCsvData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = prefs.getStringList(_csvDataKey);
+    if (jsonList == null) return null;
+    return jsonList.map((json) => List<dynamic>.from(jsonDecode(json))).toList();
+  }
+
+  static Future<String?> getCsvPad() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_csvPadKey);
+  }
+
+  static Future<void> clearCsvData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_csvDataKey);
+    await prefs.remove(_csvPadKey);
+  }
+
+  // Zoekgeschiedenis
   static Future<void> saveZoekopdracht(KoeAdvies advies) async {
     final prefs = await SharedPreferences.getInstance();
     List<KoeAdvies> geschiedenis = await getGeschiedenis();
-    
-    // Voeg toe aan begin, verwijder duplicate
     geschiedenis.removeWhere((g) => g.koe == advies.koe);
     geschiedenis.insert(0, advies);
-    
-    // Max 50 items
-    if (geschiedenis.length > 50) {
-      geschiedenis = geschiedenis.sublist(0, 50);
-    }
-    
+    if (geschiedenis.length > 50) geschiedenis = geschiedenis.sublist(0, 50);
     final jsonList = geschiedenis.map((g) => jsonEncode(g.toJson())).toList();
     await prefs.setStringList(_geschiedenisKey, jsonList);
   }
@@ -87,9 +121,7 @@ class StorageService {
   static Future<List<KoeAdvies>> getGeschiedenis() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = prefs.getStringList(_geschiedenisKey) ?? [];
-    return jsonList
-        .map((json) => KoeAdvies.fromJson(jsonDecode(json)))
-        .toList();
+    return jsonList.map((json) => KoeAdvies.fromJson(jsonDecode(json))).toList();
   }
 
   static Future<void> clearGeschiedenis() async {
@@ -97,16 +129,15 @@ class StorageService {
     await prefs.remove(_geschiedenisKey);
   }
 
+  // Favorieten
   static Future<void> toggleFavoriet(KoeAdvies advies) async {
     final prefs = await SharedPreferences.getInstance();
     List<KoeAdvies> favorieten = await getFavorieten();
-    
     if (favorieten.any((f) => f.koe == advies.koe)) {
       favorieten.removeWhere((f) => f.koe == advies.koe);
     } else {
       favorieten.add(advies);
     }
-    
     final jsonList = favorieten.map((f) => jsonEncode(f.toJson())).toList();
     await prefs.setStringList(_favorietenKey, jsonList);
   }
@@ -114,14 +145,142 @@ class StorageService {
   static Future<List<KoeAdvies>> getFavorieten() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = prefs.getStringList(_favorietenKey) ?? [];
-    return jsonList
-        .map((json) => KoeAdvies.fromJson(jsonDecode(json)))
-        .toList();
+    return jsonList.map((json) => KoeAdvies.fromJson(jsonDecode(json))).toList();
   }
 
   static Future<bool> isFavoriet(String koeNummer) async {
     final favorieten = await getFavorieten();
     return favorieten.any((f) => f.koe == koeNummer);
+  }
+}
+
+// ==================== SPLASH SCREEN ====================
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeIn),
+      ),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOutBack),
+      ),
+    );
+
+    _controller.forward();
+
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      _checkOpgeslagenCsv();
+    });
+  }
+
+  Future<void> _checkOpgeslagenCsv() async {
+    final opgeslagenCsv = await StorageService.getCsvData();
+    if (mounted) {
+      if (opgeslagenCsv != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MainScreen(csvData: opgeslagenCsv),
+          ),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const StartScreen(),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: const Color(0xFF00A651),
+    body: Center(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return FadeTransition(
+            opacity: _fadeAnimation,
+            child: ScaleTransition(
+              scale: _scaleAnimation,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // GGI LOGO HIER
+                  SvgPicture.asset(
+                    'assets/ggi_logo_white.svg',
+                    width: 120,
+                    height: 120,
+                  ),
+                  const SizedBox(height: 30),
+                  const Text(
+                    'GGI Holland',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Stieradvies App',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white70,
+                      ),
+                    ),
+                    const SizedBox(height: 50),
+                    SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.white.withOpacity(0.8),
+                        ),
+                        strokeWidth: 3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 }
 
@@ -143,8 +302,10 @@ class StartScreen extends StatelessWidget {
         fieldDelimiter: ';',
       ).convert(csvString);
 
+      await StorageService.saveCsvData(csvTable, result.files.single.path!);
+
       if (context.mounted) {
-        Navigator.push(
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) => MainScreen(csvData: csvTable),
@@ -157,53 +318,82 @@ class StartScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('GGI Holland'),
-        backgroundColor: Colors.green,
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.agriculture,
-                size: 100,
-                color: Colors.green,
-              ),
-              const SizedBox(height: 30),
-              const Text(
-                'Stieradvies App',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Selecteer een CSV-bestand om te beginnen',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-              const SizedBox(height: 40),
-              ElevatedButton.icon(
-                onPressed: () => _pickCsvFile(context),
-                icon: const Icon(Icons.upload_file, size: 28),
-                label: const Text(
-                  'CSV-bestand selecteren',
-                  style: TextStyle(fontSize: 18),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 40,
-                    vertical: 15,
+      backgroundColor: const Color(0xFF00A651),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(30.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Logo placeholder
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'GGI',
+                      style: TextStyle(
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF00A651),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 40),
+                const Text(
+                  'Welkom bij GGI Holland',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 15),
+                const Text(
+                  'Selecteer een CSV-bestand met stieradviezen om te beginnen',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                  ),
+                ),
+                const SizedBox(height: 50),
+                ElevatedButton.icon(
+                  onPressed: () => _pickCsvFile(context),
+                  icon: const Icon(Icons.upload_file, size: 28),
+                  label: const Text(
+                    'CSV-bestand selecteren',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF00A651),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Het bestand wordt opgeslagen voor toekomstig gebruik',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white54,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -242,17 +432,22 @@ class _MainScreenState extends State<MainScreen> {
             _currentIndex = index;
           });
         },
+        backgroundColor: Colors.white,
+        indicatorColor: const Color(0xFF00A651).withOpacity(0.2),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.search),
+            selectedIcon: Icon(Icons.search, color: Color(0xFF00A651)),
             label: 'Zoeken',
           ),
           NavigationDestination(
             icon: Icon(Icons.history),
+            selectedIcon: Icon(Icons.history, color: Color(0xFF00A651)),
             label: 'Geschiedenis',
           ),
           NavigationDestination(
-            icon: Icon(Icons.favorite),
+            icon: Icon(Icons.favorite_outline),
+            selectedIcon: Icon(Icons.favorite, color: Color(0xFF00A651)),
             label: 'Favorieten',
           ),
         ],
@@ -318,6 +513,7 @@ class _SearchScreenState extends State<SearchScreen> {
         SnackBar(
           content: Text('Koe $searchNumber niet gevonden'),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
@@ -348,18 +544,102 @@ class _SearchScreenState extends State<SearchScreen> {
           content: Text(
             isFav ? 'Toegevoegd aan favorieten' : 'Verwijderd uit favorieten',
           ),
-          backgroundColor: isFav ? Colors.green : Colors.orange,
+          backgroundColor: isFav ? const Color(0xFF00A651) : Colors.orange,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
+  }
+
+  Future<void> _nieuwCsvSelecteren() async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Nieuw CSV-bestand'),
+        content: const Text(
+          'Weet je zeker dat je een nieuw CSV-bestand wilt selecteren? '
+          'Het huidige bestand wordt vervangen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuleren'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              FilePickerResult? result = await FilePicker.platform.pickFiles(
+                type: FileType.custom,
+                allowedExtensions: ['csv'],
+              );
+
+              if (result != null) {
+                File file = File(result.files.single.path!);
+                String csvString = await file.readAsString();
+                
+                List<List<dynamic>> csvTable = const CsvToListConverter(
+                  fieldDelimiter: ';',
+                ).convert(csvString);
+
+                await StorageService.saveCsvData(csvTable, result.files.single.path!);
+
+                if (mounted) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MainScreen(csvData: csvTable),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'Doorgaan',
+              style: TextStyle(color: Color(0xFF00A651)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Zoek koe'),
-        backgroundColor: Colors.green,
+        title: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Center(
+                child: Text(
+                  'GGI',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF00A651),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text('Stieradvies'),
+          ],
+        ),
+        backgroundColor: const Color(0xFF00A651),
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            onPressed: _nieuwCsvSelecteren,
+            icon: const Icon(Icons.swap_horiz),
+            tooltip: 'Nieuw CSV-bestand',
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -371,9 +651,13 @@ class _SearchScreenState extends State<SearchScreen> {
               decoration: InputDecoration(
                 labelText: 'Koe nummer',
                 hintText: 'Bijv. 6949',
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search, color: Color(0xFF00A651)),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF00A651), width: 2),
                 ),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.clear),
@@ -397,9 +681,12 @@ class _SearchScreenState extends State<SearchScreen> {
                   style: TextStyle(fontSize: 18),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
+                  backgroundColor: const Color(0xFF00A651),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
@@ -407,6 +694,9 @@ class _SearchScreenState extends State<SearchScreen> {
             if (_result != null) ...[
               Card(
                 elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: Column(
@@ -415,12 +705,29 @@ class _SearchScreenState extends State<SearchScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Resultaat',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00A651).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.agriculture,
+                                  color: Color(0xFF00A651),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Resultaat',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                           IconButton(
                             onPressed: _toggleFavoriet,
@@ -434,7 +741,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           ),
                         ],
                       ),
-                      const Divider(),
+                      const Divider(height: 24),
                       _buildInfoRow('Koe nummer:', _result!['koe']),
                       _buildInfoRow('Triple:', _result!['triple']),
                       _buildInfoRow('Advies stier 1:', _result!['advies1']),
@@ -515,8 +822,32 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Zoekgeschiedenis'),
-        backgroundColor: Colors.green,
+        title: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Center(
+                child: Text(
+                  'GGI',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF00A651),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text('Geschiedenis'),
+          ],
+        ),
+        backgroundColor: const Color(0xFF00A651),
+        foregroundColor: Colors.white,
         actions: [
           if (_geschiedenis.isNotEmpty)
             IconButton(
@@ -570,14 +901,21 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
               itemBuilder: (context, index) {
                 final item = _geschiedenis[index];
                 return ListTile(
-                  leading: const Icon(Icons.search, color: Colors.green),
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00A651).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.search, color: Color(0xFF00A651)),
+                  ),
                   title: Text('Koe ${item.koe}'),
                   subtitle: Text(
                     '${item.triple} • ${_formatDatum(item.zoekDatum)}',
                   ),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () {
-                    // Toon details in dialog
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
@@ -664,8 +1002,32 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Favorieten'),
-        backgroundColor: Colors.green,
+        title: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Center(
+                child: Text(
+                  'GGI',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF00A651),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text('Favorieten'),
+          ],
+        ),
+        backgroundColor: const Color(0xFF00A651),
+        foregroundColor: Colors.white,
       ),
       body: _favorieten.isEmpty
           ? const Center(
@@ -701,7 +1063,15 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
                   ),
                   onDismissed: (_) => _removeFavoriet(item.koe),
                   child: ListTile(
-                    leading: const Icon(Icons.favorite, color: Colors.red),
+                    leading: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.favorite, color: Colors.red),
+                    ),
                     title: Text('Koe ${item.koe}'),
                     subtitle: Text(item.triple),
                     trailing: IconButton(
