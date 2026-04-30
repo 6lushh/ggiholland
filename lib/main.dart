@@ -502,9 +502,9 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final GlobalKey _searchFieldKey = GlobalKey();
   Map<String, dynamic>? _result;
   bool _isFavoriet = false;
-  bool _showDropdown = false;
   List<List<dynamic>> _filteredKoeien = [];
   OverlayEntry? _overlayEntry;
 
@@ -522,13 +522,16 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    // Filter koeien die beginnen met de ingetypte tekst
     _filteredKoeien = [];
     for (int i = 1; i < widget.csvData.length; i++) {
       var row = widget.csvData[i];
       if (row.isNotEmpty && row[0].toString().startsWith(value)) {
         _filteredKoeien.add(row);
       }
+    }
+
+    if (_filteredKoeien.length > 15) {
+      _filteredKoeien = _filteredKoeien.sublist(0, 15);
     }
 
     if (_filteredKoeien.isNotEmpty) {
@@ -541,78 +544,108 @@ class _SearchScreenState extends State<SearchScreen> {
   void _showDropdownMenu() {
     _hideDropdown();
     
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final RenderBox? renderBox = _searchFieldKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    
     final size = renderBox.size;
     final offset = renderBox.localToGlobal(Offset.zero);
 
     _overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        left: offset.dx + 20, // padding van body
-        top: offset.dy + 120, // onder het zoekveld
-        width: size.width - 40,
-        child: Material(
-          elevation: 8,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            constraints: const BoxConstraints(maxHeight: 300),
-            decoration: BoxDecoration(
-              color: GgiColors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: GgiColors.red, width: 2),
-            ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _filteredKoeien.length,
-              itemBuilder: (context, index) {
-                final koe = _filteredKoeien[index];
-                return ListTile(
-                  leading: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: GgiColors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.agriculture,
-                      color: GgiColors.red,
-                      size: 20,
-                    ),
-                  ),
-                  title: Text(
-                    'Koe ${koe[0]}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(koe[1].toString()),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    _selectKoe(koe);
-                  },
-                );
-              },
+      builder: (context) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _hideDropdown,
+              child: Container(color: Colors.transparent),
             ),
           ),
-        ),
+          Positioned(
+            left: offset.dx,
+            top: offset.dy + size.height + 8,
+            width: size.width,
+            child: Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 350),
+                decoration: BoxDecoration(
+                  color: GgiColors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: GgiColors.red, width: 2),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: _filteredKoeien.length,
+                    itemBuilder: (context, index) {
+                      final koe = _filteredKoeien[index];
+                      final isLast = index == _filteredKoeien.length - 1;
+                      return Column(
+                        children: [
+                          ListTile(
+                            dense: true,
+                            leading: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: GgiColors.red.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Icon(
+                                Icons.agriculture,
+                                color: GgiColors.red,
+                                size: 18,
+                              ),
+                            ),
+                            title: Text(
+                              'Koe ${koe[0]}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            subtitle: Text(
+                              koe[1].toString(),
+                              style: const TextStyle(fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: const Icon(
+                              Icons.arrow_forward_ios,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
+                            onTap: () {
+                              _selectKoe(koe);
+                            },
+                          ),
+                          if (!isLast)
+                            const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
 
     Overlay.of(context).insert(_overlayEntry!);
-    setState(() {
-      _showDropdown = true;
-    });
   }
 
   void _hideDropdown() {
     _overlayEntry?.remove();
     _overlayEntry = null;
-    setState(() {
-      _showDropdown = false;
-    });
   }
 
   void _selectKoe(List<dynamic> row) {
     _hideDropdown();
     _searchController.text = row[0].toString();
+    _focusNode.unfocus();
     
     final advies = KoeAdvies(
       koe: row[0].toString(),
@@ -726,58 +759,59 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        _hideDropdown();
-        FocusScope.of(context).unfocus();
-      },
-      child: Scaffold(
-        backgroundColor: GgiColors.grey,
-        appBar: AppBar(
-          title: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: GgiColors.white,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: GgiColors.red, width: 2),
-                ),
-                child: const Center(
-                  child: Text(
-                    'GGI',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: GgiColors.red,
-                    ),
+    return Scaffold(
+      backgroundColor: GgiColors.grey,
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: GgiColors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: GgiColors.red, width: 2),
+              ),
+              child: const Center(
+                child: Text(
+                  'GGI',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: GgiColors.red,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              const Text(
-                'Stieradvies',
-                style: TextStyle(color: GgiColors.white),
-              ),
-            ],
-          ),
-          backgroundColor: GgiColors.black,
-          foregroundColor: GgiColors.white,
-          actions: [
-            IconButton(
-              onPressed: _nieuwCsvSelecteren,
-              icon: const Icon(Icons.swap_horiz, color: GgiColors.yellow),
-              tooltip: 'Nieuw CSV-bestand',
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'Stieradvies',
+              style: TextStyle(color: GgiColors.white),
             ),
           ],
         ),
-        body: Padding(
+        backgroundColor: GgiColors.black,
+        foregroundColor: GgiColors.white,
+        actions: [
+          IconButton(
+            onPressed: _nieuwCsvSelecteren,
+            icon: const Icon(Icons.swap_horiz, color: GgiColors.yellow),
+            tooltip: 'Nieuw CSV-bestand',
+          ),
+        ],
+      ),
+      body: GestureDetector(
+        onTap: () {
+          _hideDropdown();
+          FocusScope.of(context).unfocus();
+        },
+        child: Padding(
           padding: const EdgeInsets.all(20.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // AUTOCOMPLETE ZOEKVELD
               TextField(
+                key: _searchFieldKey,
                 controller: _searchController,
                 focusNode: _focusNode,
                 keyboardType: TextInputType.number,
@@ -810,7 +844,6 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               const SizedBox(height: 20),
               
-              // RESULTAAT KAART
               if (_result != null) ...[
                 Card(
                   elevation: 4,
