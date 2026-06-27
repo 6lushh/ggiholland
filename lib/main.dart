@@ -1,27 +1,22 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:csv/csv.dart';
+import 'dart:io';
+import 'package:xml/xml.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
   runApp(const MyApp());
 }
 
-// ==================== GGI KLEUREN ====================
-class GgiColors {
-  static const Color black = Color(0xFF1A1A1A);
-  static const Color red = Color(0xFFE30613);
-  static const Color yellow = Color(0xFFFFD700);
-  static const Color white = Colors.white;
-  static const Color grey = Color(0xFFF5F5F5);
+// ==================== THEME ====================
+class AppTheme {
+  static const Color primary = Color(0xFFE50000); // GGI Rood
+  static const Color background = Color(0xFF121212); // Zwart
+  static const Color surface = Color(0xFF1E1E1E); // Donkergrijs
+  static const Color textPrimary = Colors.white;
+  static const Color textSecondary = Colors.white70;
+  static const Color border = Color(0xFF333333);
 }
 
 class MyApp extends StatelessWidget {
@@ -31,54 +26,78 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'GGI Holland - Stieradvies',
-      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: GgiColors.red,
-          primary: GgiColors.red,
-          secondary: GgiColors.yellow,
-        ),
         useMaterial3: true,
-        fontFamily: 'Roboto',
+        scaffoldBackgroundColor: AppTheme.background,
+        colorScheme: const ColorScheme.dark(
+          primary: AppTheme.primary,
+          surface: AppTheme.surface,
+          background: AppTheme.background,
+        ),
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(color: AppTheme.textPrimary),
+          bodyMedium: TextStyle(color: AppTheme.textPrimary),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppTheme.background,
+          foregroundColor: AppTheme.textPrimary,
+          elevation: 0,
+        ),
       ),
       home: const SplashScreen(),
     );
   }
 }
 
-// ==================== DATA MODELS ====================
+// ==================== DATAMODEL ====================
 class KoeAdvies {
   final String koe;
+  final String levensnummer;
   final String triple;
   final String advies1;
   final String advies2;
   final String advies3;
+  final String? kiCode1;
+  final String? kiCode2;
+  final String? kiCode3;
   final DateTime zoekDatum;
 
   KoeAdvies({
     required this.koe,
+    required this.levensnummer,
     required this.triple,
     required this.advies1,
     required this.advies2,
     required this.advies3,
+    this.kiCode1,
+    this.kiCode2,
+    this.kiCode3,
     required this.zoekDatum,
   });
 
   Map<String, dynamic> toJson() => {
         'koe': koe,
+        'levensnummer': levensnummer,
         'triple': triple,
         'advies1': advies1,
         'advies2': advies2,
         'advies3': advies3,
+        'kiCode1': kiCode1,
+        'kiCode2': kiCode2,
+        'kiCode3': kiCode3,
         'zoekDatum': zoekDatum.toIso8601String(),
       };
 
   factory KoeAdvies.fromJson(Map<String, dynamic> json) => KoeAdvies(
-        koe: json['koe'],
-        triple: json['triple'],
-        advies1: json['advies1'],
-        advies2: json['advies2'],
-        advies3: json['advies3'],
+        koe: json['koe'] ?? '',
+        levensnummer: json['levensnummer'] ?? '',
+        triple: json['triple'] ?? '',
+        advies1: json['advies1'] ?? '',
+        advies2: json['advies2'] ?? '',
+        advies3: json['advies3'] ?? '',
+        kiCode1: json['kiCode1'],
+        kiCode2: json['kiCode2'],
+        kiCode3: json['kiCode3'],
         zoekDatum: DateTime.parse(json['zoekDatum']),
       );
 }
@@ -87,32 +106,32 @@ class KoeAdvies {
 class StorageService {
   static const String _geschiedenisKey = 'zoek_geschiedenis';
   static const String _favorietenKey = 'favorieten';
-  static const String _csvDataKey = 'opgeslagen_csv';
-  static const String _csvPadKey = 'csv_bestand_pad';
+  static const String _xmlDataKey = 'opgeslagen_xml';
+  static const String _xmlPadKey = 'xml_bestand_pad';
 
-  static Future<void> saveCsvData(List<List<dynamic>> csvData, String bestandPad) async {
+  static Future<void> saveXmlData(List<Map<String, String>> xmlData, String bestandPad) async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonList = csvData.map((row) => jsonEncode(row)).toList();
-    await prefs.setStringList(_csvDataKey, jsonList);
-    await prefs.setString(_csvPadKey, bestandPad);
+    final jsonList = xmlData.map((row) => jsonEncode(row)).toList();
+    await prefs.setStringList(_xmlDataKey, jsonList);
+    await prefs.setString(_xmlPadKey, bestandPad);
   }
 
-  static Future<List<List<dynamic>>?> getCsvData() async {
+  static Future<List<Map<String, String>>?> getXmlData() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonList = prefs.getStringList(_csvDataKey);
+    final jsonList = prefs.getStringList(_xmlDataKey);
     if (jsonList == null) return null;
-    return jsonList.map((json) => List<dynamic>.from(jsonDecode(json))).toList();
+    return jsonList.map((json) => Map<String, String>.from(jsonDecode(json))).toList();
   }
 
-  static Future<String?> getCsvPad() async {
+  static Future<String?> getXmlPad() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_csvPadKey);
+    return prefs.getString(_xmlPadKey);
   }
 
-  static Future<void> clearCsvData() async {
+  static Future<void> clearXmlData() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_csvDataKey);
-    await prefs.remove(_csvPadKey);
+    await prefs.remove(_xmlDataKey);
+    await prefs.remove(_xmlPadKey);
   }
 
   static Future<void> saveZoekopdracht(KoeAdvies advies) async {
@@ -168,8 +187,7 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
@@ -178,39 +196,45 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(seconds: 2),
       vsync: this,
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.5, curve: Curves.easeIn),
-      ),
+      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
     );
 
     _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.5, curve: Curves.easeOutBack),
-      ),
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
     );
 
     _controller.forward();
 
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      _checkOpgeslagenCsv();
-    });
+    // Reset de v13_cleared flag om data te clearen
+    _checkDataAndNavigate();
   }
 
-  Future<void> _checkOpgeslagenCsv() async {
-    final opgeslagenCsv = await StorageService.getCsvData();
+  Future<void> _checkDataAndNavigate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasCleared = prefs.getBool('v15_cleared') ?? false;
+
+    if (!hasCleared) {
+      await StorageService.clearXmlData();
+      await StorageService.clearGeschiedenis();
+      await prefs.remove(StorageService._favorietenKey);
+      await prefs.setBool('v15_cleared', true);
+    }
+
+    final opgeslagenXml = await StorageService.getXmlData();
+
+    await Future.delayed(const Duration(seconds: 2));
+
     if (mounted) {
-      if (opgeslagenCsv != null) {
+      if (opgeslagenXml != null && opgeslagenXml.isNotEmpty) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => MainScreen(csvData: opgeslagenCsv),
+            builder: (context) => MainScreen(xmlData: opgeslagenXml),
           ),
         );
       } else {
@@ -233,72 +257,40 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: GgiColors.black,
+      backgroundColor: Colors.white,
       body: Center(
         child: AnimatedBuilder(
           animation: _controller,
           builder: (context, child) {
             return FadeTransition(
               opacity: _fadeAnimation,
-              child: ScaleTransition(
-                scale: _scaleAnimation,
+              child: Transform.scale(
+                scale: _scaleAnimation.value,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      width: 140,
-                      height: 140,
+                      width: 150,
+                      height: 150,
                       decoration: BoxDecoration(
-                        color: GgiColors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: GgiColors.red, width: 4),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'GGI',
-                          style: TextStyle(
-                            fontSize: 52,
-                            fontWeight: FontWeight.bold,
-                            color: GgiColors.red,
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
                           ),
-                        ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Image.asset('assets/icon.png', fit: BoxFit.contain),
                       ),
                     ),
-                    const SizedBox(height: 30),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: GgiColors.red,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        'GGI Holland',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: GgiColors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    const Text(
-                      'Stieradvies App',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: GgiColors.yellow,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 50),
-                    SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          GgiColors.yellow,
-                        ),
-                        strokeWidth: 3,
-                      ),
+                    const SizedBox(height: 40),
+                    const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
                     ),
                   ],
                 ),
@@ -315,27 +307,60 @@ class _SplashScreenState extends State<SplashScreen>
 class StartScreen extends StatelessWidget {
   const StartScreen({super.key});
 
-  Future<void> _pickCsvFile(BuildContext context) async {
+  Future<void> _pickXmlFile(BuildContext context) async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['csv'],
+      allowedExtensions: ['xml'],
     );
 
     if (result != null) {
       File file = File(result.files.single.path!);
-      String csvString = await file.readAsString();
+      String xmlString = await file.readAsString();
       
-      List<List<dynamic>> csvTable = const CsvToListConverter(
-        fieldDelimiter: ';',
-      ).convert(csvString);
+      List<Map<String, String>> parsedData = [];
+      try {
+        final document = XmlDocument.parse(xmlString);
+        final cows = document.findAllElements('cows');
+        for (var cow in cows) {
+          String rawEarTag = cow.findElements('EarTag').firstOrNull?.innerText ?? '';
+          String digitsOnly = rawEarTag.replaceAll(RegExp(r'\D'), '');
+          String werknummer = '';
+          if (digitsOnly.length >= 8) {
+            werknummer = digitsOnly.substring(4, 8);
+          } else {
+            werknummer = digitsOnly;
+          }
 
-      await StorageService.saveCsvData(csvTable, result.files.single.path!);
+          parsedData.add({
+            'CowNumber': cow.findElements('CowNumber').firstOrNull?.innerText ?? '',
+            'EarTag': rawEarTag,
+            'Werknummer': werknummer,
+            'Triple': cow.findElements('triple').firstOrNull?.innerText ?? cow.findElements('Triple').firstOrNull?.innerText ?? cow.findElements('TripleA').firstOrNull?.innerText ?? '',
+            'Sire': cow.findElements('Sire').firstOrNull?.innerText ?? '',
+            'NameBull1': cow.findElements('NameBull1').firstOrNull?.innerText ?? '',
+            'NameBull2': cow.findElements('NameBull2').firstOrNull?.innerText ?? '',
+            'NameBull3': cow.findElements('NameBull3').firstOrNull?.innerText ?? '',
+            'AICodeBull1': cow.findElements('AICodeBull1').firstOrNull?.innerText ?? '',
+            'AICodeBull2': cow.findElements('AICodeBull2').firstOrNull?.innerText ?? '',
+            'AICodeBull3': cow.findElements('AICodeBull3').firstOrNull?.innerText ?? '',
+          });
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Fout bij inlezen XML: $e')),
+          );
+        }
+        return;
+      }
+
+      await StorageService.saveXmlData(parsedData, result.files.single.path!);
 
       if (context.mounted) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => MainScreen(csvData: csvTable),
+            builder: (context) => MainScreen(xmlData: parsedData),
           ),
         );
       }
@@ -345,7 +370,7 @@ class StartScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: GgiColors.black,
+      backgroundColor: AppTheme.background,
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -357,72 +382,57 @@ class StartScreen extends StatelessWidget {
                   width: 120,
                   height: 120,
                   decoration: BoxDecoration(
-                    color: GgiColors.white,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: GgiColors.red, width: 3),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'GGI',
-                      style: TextStyle(
-                        fontSize: 44,
-                        fontWeight: FontWeight.bold,
-                        color: GgiColors.red,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primary.withOpacity(0.2),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
                       ),
-                    ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Image.asset('assets/icon.png', fit: BoxFit.contain),
                   ),
                 ),
                 const SizedBox(height: 40),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: GgiColors.red,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'Welkom bij GGI Holland',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: GgiColors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 15),
                 const Text(
-                  'Selecteer een CSV-bestand met stieradviezen om te beginnen',
+                  'Welkom bij GGI Holland',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Selecteer het paringsadvies XML-bestand om te beginnen.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.white70,
+                    color: AppTheme.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 50),
                 ElevatedButton.icon(
-                  onPressed: () => _pickCsvFile(context),
-                  icon: const Icon(Icons.upload_file, size: 28, color: GgiColors.black),
+                  onPressed: () => _pickXmlFile(context),
+                  icon: const Icon(Icons.upload_file, size: 28, color: Colors.white),
                   label: const Text(
-                    'CSV-bestand selecteren',
-                    style: TextStyle(fontSize: 18, color: GgiColors.black),
+                    'XML-bestand selecteren',
+                    style: TextStyle(fontSize: 18, color: Colors.white),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: GgiColors.yellow,
-                    foregroundColor: GgiColors.black,
+                    backgroundColor: AppTheme.primary,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 40,
                       vertical: 16,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(30),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Het bestand wordt opgeslagen voor toekomstig gebruik',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white54,
                   ),
                 ),
               ],
@@ -436,9 +446,9 @@ class StartScreen extends StatelessWidget {
 
 // ==================== MAIN SCREEN MET TABS ====================
 class MainScreen extends StatefulWidget {
-  final List<List<dynamic>> csvData;
+  final List<Map<String, String>> xmlData;
 
-  const MainScreen({super.key, required this.csvData});
+  const MainScreen({super.key, required this.xmlData});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -453,7 +463,7 @@ class _MainScreenState extends State<MainScreen> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          SearchScreen(csvData: widget.csvData),
+          SearchScreen(xmlData: widget.xmlData),
           const GeschiedenisScreen(),
           const FavorietenScreen(),
         ],
@@ -465,22 +475,22 @@ class _MainScreenState extends State<MainScreen> {
             _currentIndex = index;
           });
         },
-        backgroundColor: GgiColors.black,
-        indicatorColor: GgiColors.red.withOpacity(0.3),
+        backgroundColor: AppTheme.background,
+        indicatorColor: AppTheme.primary.withOpacity(0.3),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.search, color: Colors.white70),
-            selectedIcon: Icon(Icons.search, color: GgiColors.yellow),
+            selectedIcon: Icon(Icons.search, color: AppTheme.primary),
             label: 'Zoeken',
           ),
           NavigationDestination(
             icon: Icon(Icons.history, color: Colors.white70),
-            selectedIcon: Icon(Icons.history, color: GgiColors.yellow),
+            selectedIcon: Icon(Icons.history, color: AppTheme.primary),
             label: 'Geschiedenis',
           ),
           NavigationDestination(
-            icon: Icon(Icons.favorite_outline, color: Colors.white70),
-            selectedIcon: Icon(Icons.favorite, color: GgiColors.yellow),
+            icon: Icon(Icons.favorite, color: Colors.white70),
+            selectedIcon: Icon(Icons.favorite, color: AppTheme.primary),
             label: 'Favorieten',
           ),
         ],
@@ -489,11 +499,47 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
+// ==================== GEMEENSCHAPPELIJKE APPBAR ====================
+AppBar buildGGIAppBar(BuildContext context, {required VoidCallback onNieuwXml}) {
+  return AppBar(
+    title: Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Image.asset('assets/icon.png', fit: BoxFit.contain),
+          ),
+        ),
+        const SizedBox(width: 10),
+        const Text(
+          'Stieradvies',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      ],
+    ),
+    backgroundColor: AppTheme.background,
+    foregroundColor: AppTheme.textPrimary,
+    actions: [
+      IconButton(
+        onPressed: onNieuwXml,
+        icon: const Icon(Icons.swap_horiz, color: AppTheme.textSecondary),
+        tooltip: 'Nieuw XML-bestand',
+      ),
+    ],
+  );
+}
+
 // ==================== AUTOCOMPLETE ZOEKSCHERM ====================
 class SearchScreen extends StatefulWidget {
-  final List<List<dynamic>> csvData;
+  final List<Map<String, String>> xmlData;
 
-  const SearchScreen({super.key, required this.csvData});
+  const SearchScreen({super.key, required this.xmlData});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -505,132 +551,77 @@ class _SearchScreenState extends State<SearchScreen> {
   final GlobalKey _searchFieldKey = GlobalKey();
   Map<String, dynamic>? _result;
   bool _isFavoriet = false;
-  List<List<dynamic>> _filteredKoeien = [];
   OverlayEntry? _overlayEntry;
+  bool _searchByWerknummer = false;
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _focusNode.dispose();
-    _overlayEntry?.remove();
-    super.dispose();
-  }
+  void _onSearchChanged(String query) {
+    _hideDropdown();
 
-  void _onSearchChanged(String value) {
-    if (value.isEmpty) {
-      _hideDropdown();
+    if (query.isEmpty) {
+      setState(() {
+        _result = null;
+      });
       return;
     }
 
-    _filteredKoeien = [];
-    for (int i = 1; i < widget.csvData.length; i++) {
-      var row = widget.csvData[i];
-      if (row.isNotEmpty && row[0].toString().startsWith(value)) {
-        _filteredKoeien.add(row);
-      }
-    }
+    final String searchKey = _searchByWerknummer ? 'Werknummer' : 'CowNumber';
 
-    if (_filteredKoeien.length > 15) {
-      _filteredKoeien = _filteredKoeien.sublist(0, 15);
-    }
+    final matches = widget.xmlData.where((cow) {
+      return cow[searchKey]?.startsWith(query) ?? false;
+    }).take(5).toList();
 
-    if (_filteredKoeien.isNotEmpty) {
-      _showDropdownMenu();
-    } else {
-      _hideDropdown();
+    if (matches.isNotEmpty) {
+      _showDropdown(matches);
     }
   }
 
-  void _showDropdownMenu() {
+  void _showDropdown(List<Map<String, String>> matches) {
+    if (!mounted) return;
     _hideDropdown();
-    
-    final RenderBox? renderBox = _searchFieldKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
-    
+
+    final RenderBox renderBox = _searchFieldKey.currentContext!.findRenderObject() as RenderBox;
     final size = renderBox.size;
     final offset = renderBox.localToGlobal(Offset.zero);
 
     _overlayEntry = OverlayEntry(
-      builder: (context) => Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: _hideDropdown,
-              child: Container(color: Colors.transparent),
+      builder: (context) => Positioned(
+        left: offset.dx,
+        top: offset.dy + size.height + 5,
+        width: size.width,
+        child: Material(
+          elevation: 4,
+          borderRadius: BorderRadius.circular(16),
+          color: AppTheme.surface,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.border),
             ),
-          ),
-          Positioned(
-            left: offset.dx,
-            top: offset.dy + size.height + 8,
-            width: size.width,
-            child: Material(
-              elevation: 8,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                constraints: const BoxConstraints(maxHeight: 350),
-                decoration: BoxDecoration(
-                  color: GgiColors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: GgiColors.red, width: 2),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.zero,
-                    itemCount: _filteredKoeien.length,
-                    itemBuilder: (context, index) {
-                      final koe = _filteredKoeien[index];
-                      final isLast = index == _filteredKoeien.length - 1;
-                      return Column(
-                        children: [
-                          ListTile(
-                            dense: true,
-                            leading: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: GgiColors.red.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Icon(
-                                Icons.agriculture,
-                                color: GgiColors.red,
-                                size: 18,
-                              ),
-                            ),
-                            title: Text(
-                              'Koe ${koe[0]}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
-                            subtitle: Text(
-                              koe[1].toString(),
-                              style: const TextStyle(fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: const Icon(
-                              Icons.arrow_forward_ios,
-                              size: 14,
-                              color: Colors.grey,
-                            ),
-                            onTap: () {
-                              _selectKoe(koe);
-                            },
-                          ),
-                          if (!isLast)
-                            const Divider(height: 1, indent: 16, endIndent: 16),
-                        ],
-                      );
-                    },
+            child: ListView.separated(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true,
+              itemCount: matches.length,
+              separatorBuilder: (context, index) => const Divider(height: 1, color: AppTheme.border),
+              itemBuilder: (context, index) {
+                final match = matches[index];
+                return ListTile(
+                  title: Text(
+                    _searchByWerknummer 
+                        ? 'Werknummer: ${match['Werknummer']} (Halsband: ${match['CowNumber']})'
+                        : 'Halsband: ${match['CowNumber']} (Werknummer: ${match['Werknummer']})',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                   ),
-                ),
-              ),
+                  subtitle: Text('Stier: ${match['Sire']}', style: const TextStyle(color: AppTheme.textSecondary)),
+                  onTap: () {
+                    _hideDropdown();
+                    _searchController.text = _searchByWerknummer ? match['Werknummer'] ?? '' : match['CowNumber'] ?? '';
+                    _selectCow(match);
+                  },
+                );
+              },
             ),
           ),
-        ],
+        ),
       ),
     );
 
@@ -642,164 +633,64 @@ class _SearchScreenState extends State<SearchScreen> {
     _overlayEntry = null;
   }
 
-  void _selectKoe(List<dynamic> row) {
-    _hideDropdown();
-    _searchController.text = row[0].toString();
-    _focusNode.unfocus();
-    
+  Future<void> _selectCow(Map<String, String> cow) async {
     final advies = KoeAdvies(
-      koe: row[0].toString(),
-      triple: row[1].toString(),
-      advies1: row[2].toString(),
-      advies2: row.length > 3 ? row[3].toString() : '-',
-      advies3: row.length > 4 ? row[4].toString() : '-',
+      koe: cow['CowNumber'] ?? '',
+      levensnummer: cow['EarTag'] ?? '',
+      triple: cow['Triple'] ?? '',
+      advies1: cow['NameBull1'] ?? '',
+      advies2: cow['NameBull2'] ?? '',
+      advies3: cow['NameBull3'] ?? '',
+      kiCode1: cow['AICodeBull1'],
+      kiCode2: cow['AICodeBull2'],
+      kiCode3: cow['AICodeBull3'],
       zoekDatum: DateTime.now(),
     );
 
-    StorageService.saveZoekopdracht(advies).then((_) async {
-      final isFav = await StorageService.isFavoriet(advies.koe);
-      if (mounted) {
-        setState(() {
-          _result = {
-            'koe': advies.koe,
-            'triple': advies.triple,
-            'advies1': advies.advies1,
-            'advies2': advies.advies2,
-            'advies3': advies.advies3,
-          };
-          _isFavoriet = isFav;
-        });
-      }
+    setState(() {
+      _result = advies.toJson();
+    });
+    FocusScope.of(context).unfocus();
+
+    await StorageService.saveZoekopdracht(advies);
+    final isFav = await StorageService.isFavoriet(advies.koe);
+    setState(() {
+      _isFavoriet = isFav;
     });
   }
 
   Future<void> _toggleFavoriet() async {
     if (_result == null) return;
     
-    final advies = KoeAdvies(
-      koe: _result!['koe'],
-      triple: _result!['triple'],
-      advies1: _result!['advies1'],
-      advies2: _result!['advies2'],
-      advies3: _result!['advies3'],
-      zoekDatum: DateTime.now(),
-    );
-
+    final advies = KoeAdvies.fromJson(_result!);
     await StorageService.toggleFavoriet(advies);
+    
     final isFav = await StorageService.isFavoriet(advies.koe);
-
     setState(() {
       _isFavoriet = isFav;
     });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isFav ? 'Toegevoegd aan favorieten' : 'Verwijderd uit favorieten',
-          ),
-          backgroundColor: isFav ? GgiColors.red : Colors.orange,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
   }
 
-  Future<void> _nieuwCsvSelecteren() async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Nieuw CSV-bestand'),
-        content: const Text(
-          'Weet je zeker dat je een nieuw CSV-bestand wilt selecteren? '
-          'Het huidige bestand wordt vervangen.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuleren'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              FilePickerResult? result = await FilePicker.platform.pickFiles(
-                type: FileType.custom,
-                allowedExtensions: ['csv'],
-              );
-
-              if (result != null) {
-                File file = File(result.files.single.path!);
-                String csvString = await file.readAsString();
-                
-                List<List<dynamic>> csvTable = const CsvToListConverter(
-                  fieldDelimiter: ';',
-                ).convert(csvString);
-
-                await StorageService.saveCsvData(csvTable, result.files.single.path!);
-
-                if (mounted) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => MainScreen(csvData: csvTable),
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text(
-              'Doorgaan',
-              style: TextStyle(color: GgiColors.red),
-            ),
-          ),
-        ],
-      ),
+  void _nieuwXmlSelecteren() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const StartScreen()),
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _focusNode.dispose();
+    _hideDropdown();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: GgiColors.grey,
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: GgiColors.white,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: GgiColors.red, width: 2),
-              ),
-              child: const Center(
-                child: Text(
-                  'GGI',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: GgiColors.red,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'Stieradvies',
-              style: TextStyle(color: GgiColors.white),
-            ),
-          ],
-        ),
-        backgroundColor: GgiColors.black,
-        foregroundColor: GgiColors.white,
-        actions: [
-          IconButton(
-            onPressed: _nieuwCsvSelecteren,
-            icon: const Icon(Icons.swap_horiz, color: GgiColors.yellow),
-            tooltip: 'Nieuw CSV-bestand',
-          ),
-        ],
-      ),
+      backgroundColor: AppTheme.background,
+      appBar: buildGGIAppBar(context, onNieuwXml: _nieuwXmlSelecteren),
       body: GestureDetector(
         onTap: () {
           _hideDropdown();
@@ -808,30 +699,57 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Padding(
           padding: const EdgeInsets.all(20.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment<bool>(
+                    value: false,
+                    label: Text('Halsband'),
+                  ),
+                  ButtonSegment<bool>(
+                    value: true,
+                    label: Text('Werknummer'),
+                  ),
+                ],
+                selected: {_searchByWerknummer},
+                onSelectionChanged: (Set<bool> newSelection) {
+                  setState(() {
+                    _searchByWerknummer = newSelection.first;
+                    _onSearchChanged(_searchController.text);
+                  });
+                },
+                style: SegmentedButton.styleFrom(
+                  selectedForegroundColor: AppTheme.textPrimary,
+                  selectedBackgroundColor: AppTheme.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
               TextField(
                 key: _searchFieldKey,
                 controller: _searchController,
                 focusNode: _focusNode,
                 keyboardType: TextInputType.number,
                 onChanged: _onSearchChanged,
+                style: const TextStyle(color: AppTheme.textPrimary),
                 decoration: InputDecoration(
-                  labelText: 'Koe nummer',
-                  hintText: 'Begin met typen... (bijv. 77)',
-                  prefixIcon: const Icon(Icons.search, color: GgiColors.red),
+                  labelText: _searchByWerknummer ? 'Werknummer' : 'Halsband',
+                  labelStyle: const TextStyle(color: AppTheme.textSecondary),
+                  hintText: _searchByWerknummer ? 'Begin met typen... (bijv. 6712)' : 'Begin met typen... (bijv. 77)',
+                  hintStyle: const TextStyle(color: AppTheme.border),
+                  prefixIcon: const Icon(Icons.search, color: AppTheme.primary),
                   filled: true,
-                  fillColor: GgiColors.white,
+                  fillColor: AppTheme.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: GgiColors.red, width: 2),
+                    borderSide: const BorderSide(color: AppTheme.primary, width: 2),
                   ),
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.clear),
+                    icon: const Icon(Icons.clear, color: AppTheme.textSecondary),
                     onPressed: () {
                       _searchController.clear();
                       _hideDropdown();
@@ -843,13 +761,13 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              
               if (_result != null) ...[
                 Card(
                   elevation: 4,
+                  color: AppTheme.surface,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: const BorderSide(color: GgiColors.red, width: 2),
+                    side: const BorderSide(color: AppTheme.border, width: 1),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(20.0),
@@ -865,13 +783,13 @@ class _SearchScreenState extends State<SearchScreen> {
                                   width: 44,
                                   height: 44,
                                   decoration: BoxDecoration(
-                                    color: GgiColors.red.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: GgiColors.red),
+                                    color: AppTheme.primary.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(22),
+                                    border: Border.all(color: AppTheme.primary),
                                   ),
                                   child: const Icon(
                                     Icons.agriculture,
-                                    color: GgiColors.red,
+                                    color: AppTheme.primary,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -880,6 +798,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                   style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
+                                    color: AppTheme.textPrimary,
                                   ),
                                 ),
                               ],
@@ -887,21 +806,20 @@ class _SearchScreenState extends State<SearchScreen> {
                             IconButton(
                               onPressed: _toggleFavoriet,
                               icon: Icon(
-                                _isFavoriet
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                color: _isFavoriet ? GgiColors.red : Colors.grey,
+                                _isFavoriet ? Icons.favorite : Icons.favorite_border,
+                                color: _isFavoriet ? AppTheme.primary : AppTheme.textSecondary,
                                 size: 28,
                               ),
                             ),
                           ],
                         ),
-                        const Divider(height: 24),
+                        const Divider(height: 24, color: AppTheme.border),
                         _buildInfoRow('Koe nummer:', _result!['koe']),
+                        _buildInfoRow('Levensnummer:', _result!['levensnummer']),
                         _buildInfoRow('Triple:', _result!['triple']),
-                        _buildInfoRow('Advies stier 1:', _result!['advies1']),
-                        _buildInfoRow('Advies stier 2:', _result!['advies2']),
-                        _buildInfoRow('Advies stier 3:', _result!['advies3']),
+                        _buildInfoRow('Advies stier 1:', _result!['advies1'], kiCode: _result!['kiCode1']),
+                        _buildInfoRow('Advies stier 2:', _result!['advies2'], kiCode: _result!['kiCode2']),
+                        _buildInfoRow('Advies stier 3:', _result!['advies3'], kiCode: _result!['kiCode3']),
                       ],
                     ),
                   ),
@@ -914,7 +832,7 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildInfoRow(String label, String value, {String? kiCode}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
@@ -926,7 +844,7 @@ class _SearchScreenState extends State<SearchScreen> {
               label,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.grey,
+                color: AppTheme.textSecondary,
               ),
             ),
           ),
@@ -936,9 +854,22 @@ class _SearchScreenState extends State<SearchScreen> {
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
+                color: AppTheme.textPrimary,
               ),
             ),
           ),
+          if (kiCode != null && kiCode.isNotEmpty && kiCode != '-')
+            TextButton.icon(
+              onPressed: () => StierInfoDialog.show(context, kiCode, value),
+              icon: const Icon(Icons.info_outline, size: 16),
+              label: const Text('Meer info'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: AppTheme.primary,
+              ),
+            ),
         ],
       ),
     );
@@ -974,133 +905,77 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
     _loadGeschiedenis();
   }
 
+  void _nieuwXmlSelecteren() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const StartScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: GgiColors.grey,
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: GgiColors.white,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: GgiColors.red, width: 2),
-              ),
-              child: const Center(
-                child: Text(
-                  'GGI',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: GgiColors.red,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'Geschiedenis',
-              style: TextStyle(color: GgiColors.white),
-            ),
-          ],
-        ),
-        backgroundColor: GgiColors.black,
-        foregroundColor: GgiColors.white,
-        actions: [
-          if (_geschiedenis.isNotEmpty)
-            IconButton(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Geschiedenis wissen?'),
-                    content: const Text(
-                      'Alle zoekopdrachten worden verwijderd.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Annuleren'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          _clearGeschiedenis();
-                          Navigator.pop(context);
-                        },
-                        child: const Text(
-                          'Wissen',
-                          style: TextStyle(color: GgiColors.red),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-              icon: const Icon(Icons.delete, color: GgiColors.red),
-            ),
-        ],
-      ),
+      backgroundColor: AppTheme.background,
+      appBar: buildGGIAppBar(context, onNieuwXml: _nieuwXmlSelecteren),
       body: _geschiedenis.isEmpty
-          ? const Center(
+          ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.history, size: 80, color: Colors.grey),
-                  SizedBox(height: 20),
-                  Text(
-                    'Geen zoekgeschiedenis',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
+                  Icon(Icons.history, size: 64, color: AppTheme.border),
+                  const SizedBox(height: 16),
+                  const Text('Nog geen geschiedenis', style: TextStyle(color: AppTheme.textSecondary)),
                 ],
               ),
             )
           : ListView.builder(
+              padding: const EdgeInsets.all(16),
               itemCount: _geschiedenis.length,
               itemBuilder: (context, index) {
                 final item = _geschiedenis[index];
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  color: AppTheme.surface,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: AppTheme.border),
                   ),
                   child: ListTile(
-                    leading: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: GgiColors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: GgiColors.red),
-                      ),
-                      child: const Icon(Icons.search, color: GgiColors.red),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    leading: CircleAvatar(
+                      backgroundColor: AppTheme.primary.withOpacity(0.1),
+                      child: const Icon(Icons.history, color: AppTheme.primary),
                     ),
-                    title: Text('Koe ${item.koe}'),
+                    title: Text(
+                      'Koe: ${item.koe}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                    ),
                     subtitle: Text(
-                      '${item.triple} • ${_formatDatum(item.zoekDatum)}',
+                      'Triple: ${item.triple}\nDatum: ${item.zoekDatum.day}-${item.zoekDatum.month}-${item.zoekDatum.year}',
+                      style: const TextStyle(color: AppTheme.textSecondary),
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    trailing: const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
                     onTap: () {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
-                          title: Text('Koe ${item.koe}'),
+                          backgroundColor: AppTheme.surface,
+                          title: Text('Details Koe ${item.koe}', style: const TextStyle(color: AppTheme.textPrimary)),
                           content: Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              _buildDetailText('Levensnummer:', item.levensnummer),
                               _buildDetailText('Triple:', item.triple),
-                              _buildDetailText('Advies 1:', item.advies1),
-                              _buildDetailText('Advies 2:', item.advies2),
-                              _buildDetailText('Advies 3:', item.advies3),
+                              _buildDetailText('Advies 1:', item.advies1, kiCode: item.kiCode1),
+                              _buildDetailText('Advies 2:', item.advies2, kiCode: item.kiCode2),
+                              _buildDetailText('Advies 3:', item.advies3, kiCode: item.kiCode3),
                             ],
                           ),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(context),
-                              child: const Text('Sluiten'),
+                              child: const Text('Sluiten', style: TextStyle(color: AppTheme.primary)),
                             ),
                           ],
                         ),
@@ -1110,29 +985,65 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
                 );
               },
             ),
+      floatingActionButton: _geschiedenis.isEmpty
+          ? null
+          : FloatingActionButton(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    backgroundColor: AppTheme.surface,
+                    title: const Text('Geschiedenis wissen', style: TextStyle(color: AppTheme.textPrimary)),
+                    content: const Text('Weet je zeker dat je alle zoekgeschiedenis wilt wissen?', style: TextStyle(color: AppTheme.textSecondary)),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Annuleren', style: TextStyle(color: AppTheme.textSecondary)),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _clearGeschiedenis();
+                        },
+                        child: const Text('Wissen', style: TextStyle(color: AppTheme.primary)),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              backgroundColor: AppTheme.primary,
+              child: const Icon(Icons.delete, color: Colors.white),
+            ),
     );
   }
 
-  Widget _buildDetailText(String label, String value) {
+  Widget _buildDetailText(String label, String value, {String? kiCode}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(color: Colors.black, fontSize: 16),
-          children: [
-            TextSpan(
-              text: '$label ',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textSecondary)),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(color: AppTheme.textPrimary)),
+          ),
+          if (kiCode != null && kiCode.isNotEmpty && kiCode != '-')
+            TextButton(
+              onPressed: () => StierInfoDialog.show(context, kiCode, value),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: AppTheme.primary,
+              ),
+              child: const Text('Info'),
             ),
-            TextSpan(text: value),
-          ],
-        ),
+        ],
       ),
     );
-  }
-
-  String _formatDatum(DateTime datum) {
-    return '${datum.day}-${datum.month}-${datum.year} ${datum.hour}:${datum.minute.toString().padLeft(2, '0')}';
   }
 }
 
@@ -1160,128 +1071,90 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
     });
   }
 
-  Future<void> _removeFavoriet(String koeNummer) async {
-    final advies = _favorieten.firstWhere((f) => f.koe == koeNummer);
+  Future<void> _removeFavoriet(KoeAdvies advies) async {
     await StorageService.toggleFavoriet(advies);
     _loadFavorieten();
+  }
+
+  void _nieuwXmlSelecteren() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const StartScreen()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: GgiColors.grey,
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: GgiColors.white,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: GgiColors.red, width: 2),
-              ),
-              child: const Center(
-                child: Text(
-                  'GGI',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: GgiColors.red,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'Favorieten',
-              style: TextStyle(color: GgiColors.white),
-            ),
-          ],
-        ),
-        backgroundColor: GgiColors.black,
-        foregroundColor: GgiColors.white,
-      ),
+      backgroundColor: AppTheme.background,
+      appBar: buildGGIAppBar(context, onNieuwXml: _nieuwXmlSelecteren),
       body: _favorieten.isEmpty
-          ? const Center(
+          ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.favorite_border, size: 80, color: Colors.grey),
-                  SizedBox(height: 20),
-                  Text(
-                    'Geen favorieten',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    'Zoek een koe en tik op het hartje',
-                    style: TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
+                  Icon(Icons.favorite_border, size: 64, color: AppTheme.border),
+                  const SizedBox(height: 16),
+                  const Text('Nog geen favorieten', style: TextStyle(color: AppTheme.textSecondary)),
                 ],
               ),
             )
           : ListView.builder(
+              padding: const EdgeInsets.all(16),
               itemCount: _favorieten.length,
               itemBuilder: (context, index) {
                 final item = _favorieten[index];
-                return Dismissible(
-                  key: Key(item.koe),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    color: GgiColors.red,
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    child: const Icon(Icons.delete, color: Colors.white),
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  color: AppTheme.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: AppTheme.border),
                   ),
-                  onDismissed: (_) => _removeFavoriet(item.koe),
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    leading: CircleAvatar(
+                      backgroundColor: AppTheme.primary.withOpacity(0.1),
+                      child: const Icon(Icons.favorite, color: AppTheme.primary),
                     ),
-                    child: ListTile(
-                      leading: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: GgiColors.red.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: GgiColors.red),
-                        ),
-                        child: const Icon(Icons.favorite, color: GgiColors.red),
-                      ),
-                      title: Text('Koe ${item.koe}'),
-                      subtitle: Text(item.triple),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: GgiColors.red),
-                        onPressed: () => _removeFavoriet(item.koe),
-                      ),
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text('Koe ${item.koe}'),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildDetailText('Triple:', item.triple),
-                                _buildDetailText('Advies 1:', item.advies1),
-                                _buildDetailText('Advies 2:', item.advies2),
-                                _buildDetailText('Advies 3:', item.advies3),
-                              ],
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Sluiten'),
-                              ),
+                    title: Text(
+                      'Koe: ${item.koe}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                    ),
+                    subtitle: Text(
+                      'Triple: ${item.triple}',
+                      style: const TextStyle(color: AppTheme.textSecondary),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: AppTheme.primary),
+                      onPressed: () => _removeFavoriet(item),
+                    ),
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          backgroundColor: AppTheme.surface,
+                          title: Text('Details Koe ${item.koe}', style: const TextStyle(color: AppTheme.textPrimary)),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildDetailText('Levensnummer:', item.levensnummer),
+                              _buildDetailText('Triple:', item.triple),
+                              _buildDetailText('Advies 1:', item.advies1, kiCode: item.kiCode1),
+                              _buildDetailText('Advies 2:', item.advies2, kiCode: item.kiCode2),
+                              _buildDetailText('Advies 3:', item.advies3, kiCode: item.kiCode3),
                             ],
                           ),
-                        );
-                      },
-                    ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Sluiten', style: TextStyle(color: AppTheme.primary)),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 );
               },
@@ -1289,21 +1162,172 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
     );
   }
 
-  Widget _buildDetailText(String label, String value) {
+  Widget _buildDetailText(String label, String value, {String? kiCode}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(color: Colors.black, fontSize: 16),
-          children: [
-            TextSpan(
-              text: '$label ',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textSecondary)),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(color: AppTheme.textPrimary)),
+          ),
+          if (kiCode != null && kiCode.isNotEmpty && kiCode != '-')
+            TextButton(
+              onPressed: () => StierInfoDialog.show(context, kiCode, value),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: AppTheme.primary,
+              ),
+              child: const Text('Info'),
             ),
-            TextSpan(text: value),
-          ],
-        ),
+        ],
       ),
+    );
+  }
+}
+
+// ==================== STIER INFO DIALOG ====================
+class StierInfoDialog extends StatefulWidget {
+  final String kiCode;
+  final String stierName;
+
+  const StierInfoDialog({super.key, required this.kiCode, required this.stierName});
+
+  static void show(BuildContext context, String kiCode, String stierName) {
+    showDialog(
+      context: context,
+      builder: (context) => StierInfoDialog(kiCode: kiCode, stierName: stierName),
+    );
+  }
+
+  @override
+  State<StierInfoDialog> createState() => _StierInfoDialogState();
+}
+
+class _StierInfoDialogState extends State<StierInfoDialog> {
+  bool _isLoading = true;
+  String? _error;
+  Map<String, dynamic>? _data;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    try {
+      final code = widget.kiCode.replaceAll(' ', '');
+      
+      HttpClient client = HttpClient();
+      client.badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+      
+      HttpClientRequest request = await client.postUrl(Uri.parse('https://stierzoeken-api.cooperatie-crv.nl/indexes(\'bullinfo_apr2026_4\')/docs/search.post.search?api-version=2020-06-30'));
+      request.headers.set('Content-Type', 'application/json');
+      request.headers.set('api-key', 'none');
+      request.headers.set('Accept', 'application/json');
+      
+      request.write(jsonEncode({
+        "search": "$code*",
+        "select": "fullName,milkKilograms,percentageFat,percentageProtein,lifeSpan,fertility,udder,legwork",
+        "top": 1
+      }));
+      
+      HttpClientResponse response = await request.close();
+      
+      if (response.statusCode == 200) {
+        String reply = await response.transform(utf8.decoder).join();
+        if (mounted) {
+          setState(() {
+            final parsed = json.decode(reply);
+            if (parsed['value'] != null && parsed['value'].isNotEmpty) {
+              _data = parsed['value'][0];
+            } else {
+              _data = {}; // No extra data found
+            }
+            _isLoading = false;
+          });
+        }
+      } else {
+        throw Exception('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Kan stier gegevens niet laden.\nControleer uw internetverbinding.';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildRow(String label, dynamic value) {
+    if (value == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: AppTheme.textSecondary)),
+          Text(value.toString(), style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppTheme.surface,
+      title: Text('Fokwaarde stier: ${widget.stierName}', style: const TextStyle(color: AppTheme.textPrimary)),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: _isLoading
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: CircularProgressIndicator(color: AppTheme.primary),
+                ),
+              )
+            : _error != null
+                ? Text(_error!, style: const TextStyle(color: AppTheme.primary))
+                : SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildRow('Naam', _data?['fullName'] ?? widget.stierName),
+                        _buildRow('KI Code', widget.kiCode),
+                        const Divider(color: AppTheme.border, height: 20),
+                        const Text('Fokwaarden', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.primary)),
+                        const SizedBox(height: 8),
+                        if (_data != null && _data!.isEmpty)
+                          const Text('Geen verdere fokwaarden beschikbaar voor deze stier.', style: TextStyle(color: AppTheme.textSecondary))
+                        else ...[
+                          _buildRow('Melk (kg)', _data?['milkKilograms']),
+                          _buildRow('Vet %', _data?['percentageFat']),
+                          _buildRow('Eiwit %', _data?['percentageProtein']),
+                          _buildRow('LVD (Levensduur)', _data?['lifeSpan']),
+                          _buildRow('VRu (Vruchtbaarheid)', _data?['fertility']),
+                          _buildRow('U (Uier)', _data?['udder']),
+                          _buildRow('B (Beenwerk)', _data?['legwork']),
+                        ],
+                      ],
+                    ),
+                  ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Sluiten', style: TextStyle(color: AppTheme.primary)),
+        ),
+      ],
     );
   }
 }

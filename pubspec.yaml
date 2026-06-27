@@ -2,7 +2,7 @@ name: ggiholland
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.11.5
@@ -11,19 +11,27 @@ dependencies:
   flutter:
     sdk: flutter
   file_picker: ^8.0.0
-  csv: ^6.0.0
+  xml: ^6.3.0
   shared_preferences: ^2.2.2
-  cupertino_icons: ^1.0.8  # ← HIER moet het staan!
-  flutter_svg: ^2.0.9  # ← VOEG TOE voor SVG support!
-
+  cupertino_icons: ^1.0.8
+  flutter_svg: ^2.0.9
+  url_launcher: ^6.3.2
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
   assets:
     - assets/ggi_logo.svg
-    - assets/ggi_logo_white.svg
+    - assets/icon.png
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon.png"
+  min_sdk_android: 21
