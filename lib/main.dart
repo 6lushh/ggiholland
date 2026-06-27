@@ -787,9 +787,8 @@ class _SearchScreenState extends State<SearchScreen> {
                                     borderRadius: BorderRadius.circular(22),
                                     border: Border.all(color: AppTheme.primary),
                                   ),
-                                  child: const Icon(
-                                    Icons.agriculture,
-                                    color: AppTheme.primary,
+                                  child: const Center(
+                                    child: Text('🐄', style: TextStyle(fontSize: 24)),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -816,7 +815,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         const Divider(height: 24, color: AppTheme.border),
                         _buildInfoRow('Koe nummer:', _result!['koe']),
                         _buildInfoRow('Levensnummer:', _result!['levensnummer']),
-                        _buildInfoRow('Triple:', _result!['triple']),
+                        _buildInfoRow('aAa:', _result!['triple']),
                         _buildInfoRow('Advies stier 1:', _result!['advies1'], kiCode: _result!['kiCode1']),
                         _buildInfoRow('Advies stier 2:', _result!['advies2'], kiCode: _result!['kiCode2']),
                         _buildInfoRow('Advies stier 3:', _result!['advies3'], kiCode: _result!['kiCode3']),
@@ -951,7 +950,7 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                     ),
                     subtitle: Text(
-                      'Triple: ${item.triple}\nDatum: ${item.zoekDatum.day}-${item.zoekDatum.month}-${item.zoekDatum.year}',
+                      'aAa: ${item.triple}\nDatum: ${item.zoekDatum.day}-${item.zoekDatum.month}-${item.zoekDatum.year}',
                       style: const TextStyle(color: AppTheme.textSecondary),
                     ),
                     trailing: const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
@@ -966,7 +965,7 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               _buildDetailText('Levensnummer:', item.levensnummer),
-                              _buildDetailText('Triple:', item.triple),
+                              _buildDetailText('aAa:', item.triple),
                               _buildDetailText('Advies 1:', item.advies1, kiCode: item.kiCode1),
                               _buildDetailText('Advies 2:', item.advies2, kiCode: item.kiCode2),
                               _buildDetailText('Advies 3:', item.advies3, kiCode: item.kiCode3),
@@ -1122,7 +1121,7 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                     ),
                     subtitle: Text(
-                      'Triple: ${item.triple}',
+                      'aAa: ${item.triple}',
                       style: const TextStyle(color: AppTheme.textSecondary),
                     ),
                     trailing: IconButton(
@@ -1140,7 +1139,7 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               _buildDetailText('Levensnummer:', item.levensnummer),
-                              _buildDetailText('Triple:', item.triple),
+                              _buildDetailText('aAa:', item.triple),
                               _buildDetailText('Advies 1:', item.advies1, kiCode: item.kiCode1),
                               _buildDetailText('Advies 2:', item.advies2, kiCode: item.kiCode2),
                               _buildDetailText('Advies 3:', item.advies3, kiCode: item.kiCode3),
