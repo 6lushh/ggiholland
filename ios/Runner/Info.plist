@@ -76,5 +76,7 @@
 	<string>GGI Holland - Stieradvies gebruikt de camera niet, maar dit is vereist door de iOS bestandsbeheerder.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>GGI Holland - Stieradvies gebruikt uw locatie niet, maar dit is vereist door de onderliggende iOS frameworks.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
