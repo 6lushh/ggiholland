@@ -70,5 +70,11 @@
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>GGI Holland - Stieradvies heeft toegang tot bestanden nodig om het XML-paringsadvies te kunnen importeren.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>GGI Holland - Stieradvies gebruikt de camera niet, maar dit is vereist door de iOS bestandsbeheerder.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>GGI Holland - Stieradvies gebruikt uw locatie niet, maar dit is vereist door de onderliggende iOS frameworks.</string>
 </dict>
 </plist>
