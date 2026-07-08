@@ -26,6 +26,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      builder: (context, child) => GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: child,
+      ),
       title: 'GGI Holland - Stieradvies',
       theme: ThemeData(
         useMaterial3: true,
