@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:xml/xml.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const MyApp());
@@ -1328,18 +1327,6 @@ class _StierInfoDialogState extends State<StierInfoDialog> {
                   ),
       ),
       actions: [
-        TextButton(
-          onPressed: () async {
-            final code = widget.kiCode.replaceAll(' ', '');
-            final url = Uri.parse('https://shop.crv4all.nl/nl/nld/bull/$code');
-            if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kan website niet openen')));
-              }
-            }
-          },
-          child: const Text('Website CRV', style: TextStyle(color: AppTheme.textSecondary)),
-        ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Sluiten', style: TextStyle(color: AppTheme.primary)),
