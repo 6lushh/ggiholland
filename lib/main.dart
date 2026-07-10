@@ -703,9 +703,14 @@ class _SearchScreenState extends State<SearchScreen> {
         },
         child: Padding(
           padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isTablet = constraints.maxWidth >= 600;
+
+              final searchControls = Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
               SegmentedButton<bool>(
                 segments: const [
                   ButtonSegment<bool>(
@@ -765,9 +770,10 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
-              if (_result != null) ...[
-                Card(
+                ],
+              ); // End of searchControls
+
+              final resultCard = _result == null ? null : Card(
                   elevation: 4,
                   color: AppTheme.surface,
                   shape: RoundedRectangleBorder(
@@ -827,9 +833,41 @@ class _SearchScreenState extends State<SearchScreen> {
                       ],
                     ),
                   ),
-                ),
-              ],
-            ],
+                );
+
+              if (isTablet) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: searchControls,
+                    ),
+                    const SizedBox(width: 40),
+                    Expanded(
+                      flex: 1,
+                      child: resultCard == null 
+                        ? const Center(child: Text('Zoek en selecteer een koe om hier de resultaten te zien.', style: TextStyle(color: AppTheme.textSecondary)))
+                        : SingleChildScrollView(child: resultCard),
+                    ),
+                  ],
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  searchControls,
+                  const SizedBox(height: 20),
+                  if (resultCard != null)
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: resultCard,
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -932,13 +970,19 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
                 ],
               ),
             )
-          : ListView.builder(
+          : GridView.builder(
               padding: const EdgeInsets.all(16),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 500,
+                mainAxisExtent: 120,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 12,
+              ),
               itemCount: _geschiedenis.length,
               itemBuilder: (context, index) {
                 final item = _geschiedenis[index];
                 return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
+                  margin: EdgeInsets.zero,
                   color: AppTheme.surface,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -1103,13 +1147,19 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
                 ],
               ),
             )
-          : ListView.builder(
+          : GridView.builder(
               padding: const EdgeInsets.all(16),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 500,
+                mainAxisExtent: 120,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 12,
+              ),
               itemCount: _favorieten.length,
               itemBuilder: (context, index) {
                 final item = _favorieten[index];
                 return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
+                  margin: EdgeInsets.zero,
                   color: AppTheme.surface,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
