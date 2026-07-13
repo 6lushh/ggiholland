@@ -2,11 +2,7 @@ name: ggiholland
 description: "A new Flutter project."
 publish_to: 'none'
 
-<<<<<<< HEAD
 version: 2.0.1+1
-=======
-version: 1.0.1+8
->>>>>>> 853889a (chore: bump build number to 8 in pubspec and update release apk)
 
 environment:
   sdk: ^3.11.5
