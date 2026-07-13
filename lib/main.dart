@@ -310,6 +310,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 }
 
 // ==================== STARTSCHERM ====================
+class XmlFileInfo {
+  final String fileName;
+  final String lastModified;
+  final DateTime parsedDate;
+
+  XmlFileInfo(this.fileName, this.lastModified, this.parsedDate);
+}
+
 class StartScreen extends StatefulWidget {
   const StartScreen({super.key});
 
@@ -321,7 +329,7 @@ class _StartScreenState extends State<StartScreen> {
   final TextEditingController _ubnController = TextEditingController();
   bool _isLoading = false;
 
-  Future<void> _fetchXmlData(BuildContext context) async {
+  Future<void> _fetchDirectoryData(BuildContext context) async {
     final ubn = _ubnController.text.trim();
     if (ubn.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -335,12 +343,45 @@ class _StartScreenState extends State<StartScreen> {
     });
 
     try {
-      final url = Uri.parse('http://212.227.3.89/$ubn/stierdata.xml');
-      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      final dirUrl = Uri.parse('http://212.227.3.89/$ubn/');
+      final response = await http.get(dirUrl).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
-        final xmlString = response.body;
-        await _parseAndSaveXml(xmlString, 'Server XML');
+        final htmlContent = response.body;
+        final regex = RegExp(r'<a href="([^"]+\.xml)">.*?</a>.*?<td align="right">\s*([^<]+?)\s*</td>');
+        final matches = regex.allMatches(htmlContent);
+
+        List<XmlFileInfo> files = [];
+        for (var match in matches) {
+          final fileName = match.group(1)!;
+          final dateStr = match.group(2)!.trim();
+          DateTime? parsedDate;
+          try {
+             parsedDate = DateTime.parse(dateStr);
+          } catch (e) {
+             parsedDate = DateTime.fromMillisecondsSinceEpoch(0);
+          }
+          files.add(XmlFileInfo(fileName, dateStr, parsedDate));
+        }
+
+        if (files.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Geen XML bestanden gevonden voor dit UBN.')),
+            );
+          }
+          return;
+        }
+
+        files.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
+
+        if (files.length == 1) {
+          await _downloadSpecificFile(ubn, files.first.fileName);
+        } else {
+          if (mounted) {
+            _showFileSelectionBottomSheet(context, ubn, files);
+          }
+        }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -359,6 +400,93 @@ class _StartScreenState extends State<StartScreen> {
         setState(() {
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  void _showFileSelectionBottomSheet(BuildContext context, String ubn, List<XmlFileInfo> files) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Selecteer een bestand',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+              const Divider(color: AppTheme.border),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: files.length,
+                  itemBuilder: (context, index) {
+                    final file = files[index];
+                    final isNewest = index == 0;
+                    return ListTile(
+                      leading: const Icon(Icons.description, color: AppTheme.primary),
+                      title: Text(file.fileName, style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+                      subtitle: Text('Datum: ${file.lastModified}', style: const TextStyle(color: AppTheme.textSecondary)),
+                      trailing: isNewest 
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.green),
+                            ),
+                            child: const Text('Nieuwste', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                          )
+                        : null,
+                      onTap: () {
+                        Navigator.pop(context);
+                        setState(() { _isLoading = true; });
+                        _downloadSpecificFile(ubn, file.fileName).whenComplete(() {
+                          if (mounted) setState(() { _isLoading = false; });
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _downloadSpecificFile(String ubn, String fileName) async {
+    try {
+      final fileUrl = Uri.parse('http://212.227.3.89/${ubn}/${fileName}');
+      final response = await http.get(fileUrl).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        final xmlString = response.body;
+        await _parseAndSaveXml(xmlString, 'Server XML: ${fileName}');
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Kan het geselecteerde bestand niet downloaden.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fout tijdens downloaden van bestand: ${e}')),
+        );
       }
     }
   }
@@ -408,7 +536,7 @@ class _StartScreenState extends State<StartScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fout bij inlezen XML: $e')),
+          SnackBar(content: Text('Fout bij inlezen XML: ${e}')),
         );
       }
       return;
@@ -506,7 +634,7 @@ class _StartScreenState extends State<StartScreen> {
                 _isLoading
                     ? const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary))
                     : ElevatedButton.icon(
-                        onPressed: () => _fetchXmlData(context),
+                        onPressed: () => _fetchDirectoryData(context),
                         icon: const Icon(Icons.cloud_download, size: 28, color: Colors.white),
                         label: const Text(
                           'Gegevens ophalen',
