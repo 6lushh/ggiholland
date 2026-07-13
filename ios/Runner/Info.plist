@@ -78,5 +78,10 @@
 	<string>GGI Holland - Stieradvies gebruikt uw locatie niet, maar dit is vereist door de onderliggende iOS frameworks.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
