@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:xml/xml.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MyApp());
@@ -309,8 +310,186 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 }
 
 // ==================== STARTSCHERM ====================
-class StartScreen extends StatelessWidget {
+class XmlFileInfo {
+  final String fileName;
+  final String lastModified;
+  final DateTime parsedDate;
+
+  XmlFileInfo(this.fileName, this.lastModified, this.parsedDate);
+}
+
+class StartScreen extends StatefulWidget {
   const StartScreen({super.key});
+
+  @override
+  State<StartScreen> createState() => _StartScreenState();
+}
+
+class _StartScreenState extends State<StartScreen> {
+  final TextEditingController _ubnController = TextEditingController();
+  bool _isLoading = false;
+
+  Future<void> _fetchDirectoryData(BuildContext context) async {
+    final ubn = _ubnController.text.trim();
+    if (ubn.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vul alstublieft een UBN in')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final dirUrl = Uri.parse('http://212.227.3.89/$ubn/');
+      final response = await http.get(dirUrl).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final htmlContent = response.body;
+        final regex = RegExp(r'<a href="([^"]+\.xml)">.*?</a>.*?<td align="right">\s*([^<]+?)\s*</td>');
+        final matches = regex.allMatches(htmlContent);
+
+        List<XmlFileInfo> files = [];
+        for (var match in matches) {
+          final fileName = match.group(1)!;
+          final dateStr = match.group(2)!.trim();
+          DateTime? parsedDate;
+          try {
+             parsedDate = DateTime.parse(dateStr);
+          } catch (e) {
+             parsedDate = DateTime.fromMillisecondsSinceEpoch(0);
+          }
+          files.add(XmlFileInfo(fileName, dateStr, parsedDate));
+        }
+
+        if (files.isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Geen XML bestanden gevonden voor dit UBN.')),
+            );
+          }
+          return;
+        }
+
+        files.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
+
+        if (files.length == 1) {
+          await _downloadSpecificFile(ubn, files.first.fileName);
+        } else {
+          if (mounted) {
+            _showFileSelectionBottomSheet(context, ubn, files);
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Kan geen gegevens vinden voor dit UBN. Controleer het nummer.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Netwerkfout: kan niet verbinden met de server. Probeer het later opnieuw. \n($e)')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _showFileSelectionBottomSheet(BuildContext context, String ubn, List<XmlFileInfo> files) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Selecteer een bestand',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+              const Divider(color: AppTheme.border),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: files.length,
+                  itemBuilder: (context, index) {
+                    final file = files[index];
+                    final isNewest = index == 0;
+                    return ListTile(
+                      leading: const Icon(Icons.description, color: AppTheme.primary),
+                      title: Text(file.fileName, style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+                      subtitle: Text('Datum: ${file.lastModified}', style: const TextStyle(color: AppTheme.textSecondary)),
+                      trailing: isNewest 
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.green),
+                            ),
+                            child: const Text('Nieuwste', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                          )
+                        : null,
+                      onTap: () {
+                        Navigator.pop(context);
+                        setState(() { _isLoading = true; });
+                        _downloadSpecificFile(ubn, file.fileName).whenComplete(() {
+                          if (mounted) setState(() { _isLoading = false; });
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _downloadSpecificFile(String ubn, String fileName) async {
+    try {
+      final fileUrl = Uri.parse('http://212.227.3.89/${ubn}/${fileName}');
+      final response = await http.get(fileUrl).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        final xmlString = response.body;
+        await _parseAndSaveXml(xmlString, 'Server XML: ${fileName}');
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Kan het geselecteerde bestand niet downloaden.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fout tijdens downloaden van bestand: ${e}')),
+        );
+      }
+    }
+  }
 
   Future<void> _pickXmlFile(BuildContext context) async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -321,55 +500,64 @@ class StartScreen extends StatelessWidget {
     if (result != null) {
       File file = File(result.files.single.path!);
       String xmlString = await file.readAsString();
-      
-      List<Map<String, String>> parsedData = [];
-      try {
-        final document = XmlDocument.parse(xmlString);
-        final cows = document.findAllElements('cows');
-        for (var cow in cows) {
-          String rawEarTag = cow.findElements('EarTag').firstOrNull?.innerText ?? '';
-          String digitsOnly = rawEarTag.replaceAll(RegExp(r'\D'), '');
-          String werknummer = '';
-          if (digitsOnly.length >= 8) {
-            werknummer = digitsOnly.substring(4, 8);
-          } else {
-            werknummer = digitsOnly;
-          }
+      await _parseAndSaveXml(xmlString, result.files.single.path!);
+    }
+  }
 
-          parsedData.add({
-            'CowNumber': cow.findElements('CowNumber').firstOrNull?.innerText ?? '',
-            'EarTag': rawEarTag,
-            'Werknummer': werknummer,
-            'Triple': cow.findElements('triple').firstOrNull?.innerText ?? cow.findElements('Triple').firstOrNull?.innerText ?? cow.findElements('TripleA').firstOrNull?.innerText ?? '',
-            'Sire': cow.findElements('Sire').firstOrNull?.innerText ?? '',
-            'NameBull1': cow.findElements('NameBull1').firstOrNull?.innerText ?? '',
-            'NameBull2': cow.findElements('NameBull2').firstOrNull?.innerText ?? '',
-            'NameBull3': cow.findElements('NameBull3').firstOrNull?.innerText ?? '',
-            'AICodeBull1': cow.findElements('AICodeBull1').firstOrNull?.innerText ?? '',
-            'AICodeBull2': cow.findElements('AICodeBull2').firstOrNull?.innerText ?? '',
-            'AICodeBull3': cow.findElements('AICodeBull3').firstOrNull?.innerText ?? '',
-          });
+  Future<void> _parseAndSaveXml(String xmlString, String filePath) async {
+    List<Map<String, String>> parsedData = [];
+    try {
+      final document = XmlDocument.parse(xmlString);
+      final cows = document.findAllElements('cows');
+      for (var cow in cows) {
+        String rawEarTag = cow.findElements('EarTag').firstOrNull?.innerText ?? '';
+        String digitsOnly = rawEarTag.replaceAll(RegExp(r'\D'), '');
+        String werknummer = '';
+        if (digitsOnly.length >= 8) {
+          werknummer = digitsOnly.substring(4, 8);
+        } else {
+          werknummer = digitsOnly;
         }
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Fout bij inlezen XML: $e')),
-          );
-        }
-        return;
+
+        parsedData.add({
+          'CowNumber': cow.findElements('CowNumber').firstOrNull?.innerText ?? '',
+          'EarTag': rawEarTag,
+          'Werknummer': werknummer,
+          'Triple': cow.findElements('triple').firstOrNull?.innerText ?? cow.findElements('Triple').firstOrNull?.innerText ?? cow.findElements('TripleA').firstOrNull?.innerText ?? '',
+          'Sire': cow.findElements('Sire').firstOrNull?.innerText ?? '',
+          'NameBull1': cow.findElements('NameBull1').firstOrNull?.innerText ?? '',
+          'NameBull2': cow.findElements('NameBull2').firstOrNull?.innerText ?? '',
+          'NameBull3': cow.findElements('NameBull3').firstOrNull?.innerText ?? '',
+          'AICodeBull1': cow.findElements('AICodeBull1').firstOrNull?.innerText ?? '',
+          'AICodeBull2': cow.findElements('AICodeBull2').firstOrNull?.innerText ?? '',
+          'AICodeBull3': cow.findElements('AICodeBull3').firstOrNull?.innerText ?? '',
+        });
       }
-
-      await StorageService.saveXmlData(parsedData, result.files.single.path!);
-
-      if (context.mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MainScreen(xmlData: parsedData),
-          ),
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fout bij inlezen XML: ${e}')),
         );
       }
+      return;
     }
+
+    await StorageService.saveXmlData(parsedData, filePath);
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MainScreen(xmlData: parsedData),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _ubnController.dispose();
+    super.dispose();
   }
 
   @override
@@ -378,7 +566,7 @@ class StartScreen extends StatelessWidget {
       backgroundColor: AppTheme.background,
       body: SafeArea(
         child: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(30.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -391,7 +579,7 @@ class StartScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: AppTheme.primary.withOpacity(0.2),
+                        color: AppTheme.primary.withValues(alpha: 0.2),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
@@ -414,30 +602,62 @@ class StartScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Selecteer het paringsadvies XML-bestand om te beginnen.',
+                  'Vul uw UBN-nummer in om de paringsadviezen op te halen.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
                     color: AppTheme.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 50),
-                ElevatedButton.icon(
-                  onPressed: () => _pickXmlFile(context),
-                  icon: const Icon(Icons.upload_file, size: 28, color: Colors.white),
-                  label: const Text(
-                    'XML-bestand selecteren',
-                    style: TextStyle(fontSize: 18, color: Colors.white),
+                const SizedBox(height: 40),
+                TextField(
+                  controller: _ubnController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18),
+                  textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    labelText: 'UBN',
+                    labelStyle: const TextStyle(color: AppTheme.textSecondary),
+                    filled: true,
+                    fillColor: AppTheme.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppTheme.primary, width: 2),
+                    ),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 40,
-                      vertical: 16,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
+                ),
+                const SizedBox(height: 24),
+                _isLoading
+                    ? const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary))
+                    : ElevatedButton.icon(
+                        onPressed: () => _fetchDirectoryData(context),
+                        icon: const Icon(Icons.cloud_download, size: 28, color: Colors.white),
+                        label: const Text(
+                          'Gegevens ophalen',
+                          style: TextStyle(fontSize: 18, color: Colors.white),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 40,
+                            vertical: 16,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                          minimumSize: const Size(double.infinity, 60),
+                        ),
+                      ),
+                const SizedBox(height: 30),
+                TextButton(
+                  onPressed: () => _pickXmlFile(context),
+                  child: const Text(
+                    'Of selecteer handmatig een XML-bestand',
+                    style: TextStyle(color: AppTheme.textSecondary, decoration: TextDecoration.underline),
                   ),
                 ),
               ],
