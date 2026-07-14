@@ -749,7 +749,39 @@ class _MainScreenState extends State<MainScreen> {
       final newestFileName = files.first.fileName;
       if (xmlPad == 'Server XML: $newestFileName') return; // Al nieuwste bestand
 
-      // Nieuw bestand gevonden!
+      // Nieuw bestand gevonden! Toon een melding aan de boer
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Nieuw stieradvies gevonden'),
+              content: Text('Er is een nieuwer bestand gevonden op de server ($newestFileName).\nWilt u deze nu inladen?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Later'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _downloadAndUpdateXml(ubn, newestFileName);
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+                  child: const Text('Nu inladen', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      }
+    } catch (e) {
+      // Fout negeren op de achtergrond
+    }
+  }
+
+  Future<void> _downloadAndUpdateXml(String ubn, String newestFileName) async {
+    try {
       final fileUrl = Uri.parse('http://212.227.3.89/$ubn/$newestFileName');
       final fileResponse = await http.get(fileUrl).timeout(const Duration(seconds: 15));
       if (fileResponse.statusCode != 200) return;
@@ -784,7 +816,7 @@ class _MainScreenState extends State<MainScreen> {
           _currentXmlData = parsedData;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Nieuw XML bestand op de achtergrond gedownload!')),
+          const SnackBar(content: Text('Nieuw XML bestand succesvol ingeladen!')),
         );
       }
     } catch (e) {
