@@ -831,8 +831,8 @@ class _MainScreenState extends State<MainScreen> {
         index: _currentIndex,
         children: [
           SearchScreen(xmlData: _currentXmlData),
-          const GeschiedenisScreen(),
-          const FavorietenScreen(),
+          _currentIndex == 1 ? const GeschiedenisScreen() : const SizedBox.shrink(),
+          _currentIndex == 2 ? const FavorietenScreen() : const SizedBox.shrink(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
