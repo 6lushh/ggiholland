@@ -114,6 +114,7 @@ class StorageService {
   static const String _favorietenKey = 'favorieten';
   static const String _xmlDataKey = 'opgeslagen_xml';
   static const String _xmlPadKey = 'xml_bestand_pad';
+  static const String _ubnKey = 'opgeslagen_ubn';
 
   static Future<void> saveXmlData(List<Map<String, String>> xmlData, String bestandPad) async {
     final prefs = await SharedPreferences.getInstance();
@@ -138,6 +139,16 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_xmlDataKey);
     await prefs.remove(_xmlPadKey);
+  }
+
+  static Future<void> saveUbn(String ubn) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_ubnKey, ubn);
+  }
+
+  static Future<String?> getUbn() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_ubnKey);
   }
 
   static Future<void> saveZoekopdracht(KoeAdvies advies) async {
@@ -329,6 +340,21 @@ class _StartScreenState extends State<StartScreen> {
   final TextEditingController _ubnController = TextEditingController();
   bool _isLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedUbn();
+  }
+
+  Future<void> _loadSavedUbn() async {
+    final savedUbn = await StorageService.getUbn();
+    if (savedUbn != null && savedUbn.isNotEmpty) {
+      setState(() {
+        _ubnController.text = savedUbn;
+      });
+    }
+  }
+
   Future<void> _fetchDirectoryData(BuildContext context) async {
     final ubn = _ubnController.text.trim();
     if (ubn.isEmpty) {
@@ -372,7 +398,7 @@ class _StartScreenState extends State<StartScreen> {
           }
           return;
         }
-
+        await StorageService.saveUbn(ubn);
         files.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
 
         if (files.length == 1) {
