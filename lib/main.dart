@@ -707,6 +707,90 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  late List<Map<String, String>> _currentXmlData;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentXmlData = widget.xmlData;
+    _checkForUpdatesInBackground();
+  }
+
+  Future<void> _checkForUpdatesInBackground() async {
+    try {
+      final ubn = await StorageService.getUbn();
+      final xmlPad = await StorageService.getXmlPad();
+      if (ubn == null || ubn.isEmpty || xmlPad == null || !xmlPad.startsWith('Server XML: ')) return;
+
+      final dirUrl = Uri.parse('http://212.227.3.89/$ubn/');
+      final response = await http.get(dirUrl).timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) return;
+
+      final htmlContent = response.body;
+      final regex = RegExp(r'<a href="([^"]+\.xml)">.*?</a>.*?<td align="right">\s*([^<]+?)\s*</td>');
+      final matches = regex.allMatches(htmlContent);
+
+      List<XmlFileInfo> files = [];
+      for (var match in matches) {
+        final fileName = match.group(1)!;
+        final dateStr = match.group(2)!.trim();
+        DateTime? parsedDate;
+        try {
+           parsedDate = DateTime.parse(dateStr);
+        } catch (e) {
+           parsedDate = DateTime.fromMillisecondsSinceEpoch(0);
+        }
+        files.add(XmlFileInfo(fileName, dateStr, parsedDate));
+      }
+
+      if (files.isEmpty) return;
+      files.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
+      
+      final newestFileName = files.first.fileName;
+      if (xmlPad == 'Server XML: $newestFileName') return; // Al nieuwste bestand
+
+      // Nieuw bestand gevonden!
+      final fileUrl = Uri.parse('http://212.227.3.89/$ubn/$newestFileName');
+      final fileResponse = await http.get(fileUrl).timeout(const Duration(seconds: 15));
+      if (fileResponse.statusCode != 200) return;
+
+      // Parse XML
+      List<Map<String, String>> parsedData = [];
+      final document = XmlDocument.parse(fileResponse.body);
+      final cows = document.findAllElements('cows');
+      for (var cow in cows) {
+        String rawEarTag = cow.findElements('EarTag').firstOrNull?.innerText ?? '';
+        String digitsOnly = rawEarTag.replaceAll(RegExp(r'\D'), '');
+        String werknummer = digitsOnly.length >= 8 ? digitsOnly.substring(4, 8) : digitsOnly;
+        parsedData.add({
+          'CowNumber': cow.findElements('CowNumber').firstOrNull?.innerText ?? '',
+          'EarTag': rawEarTag,
+          'Werknummer': werknummer,
+          'Triple': cow.findElements('triple').firstOrNull?.innerText ?? cow.findElements('Triple').firstOrNull?.innerText ?? cow.findElements('TripleA').firstOrNull?.innerText ?? '',
+          'Sire': cow.findElements('Sire').firstOrNull?.innerText ?? '',
+          'NameBull1': cow.findElements('NameBull1').firstOrNull?.innerText ?? '',
+          'NameBull2': cow.findElements('NameBull2').firstOrNull?.innerText ?? '',
+          'NameBull3': cow.findElements('NameBull3').firstOrNull?.innerText ?? '',
+          'AICodeBull1': cow.findElements('AICodeBull1').firstOrNull?.innerText ?? '',
+          'AICodeBull2': cow.findElements('AICodeBull2').firstOrNull?.innerText ?? '',
+          'AICodeBull3': cow.findElements('AICodeBull3').firstOrNull?.innerText ?? '',
+        });
+      }
+
+      // Save and update
+      await StorageService.saveXmlData(parsedData, 'Server XML: $newestFileName');
+      if (mounted) {
+        setState(() {
+          _currentXmlData = parsedData;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nieuw XML bestand op de achtergrond gedownload!')),
+        );
+      }
+    } catch (e) {
+      // Fout negeren op de achtergrond
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -714,7 +798,7 @@ class _MainScreenState extends State<MainScreen> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          SearchScreen(xmlData: widget.xmlData),
+          SearchScreen(xmlData: _currentXmlData),
           const GeschiedenisScreen(),
           const FavorietenScreen(),
         ],
