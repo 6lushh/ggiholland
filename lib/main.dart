@@ -369,8 +369,8 @@ class _StartScreenState extends State<StartScreen> {
     });
 
     try {
-      final dirUrl = Uri.parse('http://212.227.3.89/$ubn/');
-      final response = await http.get(dirUrl).timeout(const Duration(seconds: 15));
+      final dirUrl = Uri.parse('http://212.227.3.89/GGI/$ubn/');
+      final response = await http.get(dirUrl, headers: {'X-GGI-App': 'True'}).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final htmlContent = response.body;
@@ -496,8 +496,8 @@ class _StartScreenState extends State<StartScreen> {
 
   Future<void> _downloadSpecificFile(String ubn, String fileName) async {
     try {
-      final fileUrl = Uri.parse('http://212.227.3.89/${ubn}/${fileName}');
-      final response = await http.get(fileUrl).timeout(const Duration(seconds: 15));
+      final fileUrl = Uri.parse('http://212.227.3.89/GGI/${ubn}/${fileName}');
+      final response = await http.get(fileUrl, headers: {'X-GGI-App': 'True'}).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final xmlString = response.body;
         await _parseAndSaveXml(xmlString, 'Server XML: ${fileName}');
@@ -722,8 +722,8 @@ class _MainScreenState extends State<MainScreen> {
       final xmlPad = await StorageService.getXmlPad();
       if (ubn == null || ubn.isEmpty || xmlPad == null || !xmlPad.startsWith('Server XML: ')) return;
 
-      final dirUrl = Uri.parse('http://212.227.3.89/$ubn/');
-      final response = await http.get(dirUrl).timeout(const Duration(seconds: 15));
+      final dirUrl = Uri.parse('http://212.227.3.89/GGI/$ubn/');
+      final response = await http.get(dirUrl, headers: {'X-GGI-App': 'True'}).timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) return;
 
       final htmlContent = response.body;
@@ -782,8 +782,8 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _downloadAndUpdateXml(String ubn, String newestFileName) async {
     try {
-      final fileUrl = Uri.parse('http://212.227.3.89/$ubn/$newestFileName');
-      final fileResponse = await http.get(fileUrl).timeout(const Duration(seconds: 15));
+      final fileUrl = Uri.parse('http://212.227.3.89/GGI/$ubn/$newestFileName');
+      final fileResponse = await http.get(fileUrl, headers: {'X-GGI-App': 'True'}).timeout(const Duration(seconds: 15));
       if (fileResponse.statusCode != 200) return;
 
       // Parse XML
