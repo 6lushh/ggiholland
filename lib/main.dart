@@ -1466,17 +1466,17 @@ class _SearchScreenState extends State<SearchScreen> {
                             ),
                             _buildInfoRow('aAa:', _result!['triple']),
                             _buildInfoRow(
-                              'Advies stier 1:',
+                              'Stier 1:',
                               _result!['advies1'],
                               kiCode: _result!['kiCode1'],
                             ),
                             _buildInfoRow(
-                              'Advies stier 2:',
+                              'Stier 2:',
                               _result!['advies2'],
                               kiCode: _result!['kiCode2'],
                             ),
                             _buildInfoRow(
-                              'Advies stier 3:',
+                              'Stier 3:',
                               _result!['advies3'],
                               kiCode: _result!['kiCode3'],
                             ),
@@ -1539,27 +1539,37 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
           Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: AppTheme.textPrimary,
-              ),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8.0,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                if (kiCode != null && kiCode.isNotEmpty && kiCode != '-')
+                  TextButton.icon(
+                    onPressed: () =>
+                        StierInfoDialog.show(context, kiCode, value),
+                    icon: const Icon(Icons.info_outline, size: 16),
+                    label: const Text('Info'),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 0,
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      foregroundColor: AppTheme.primary,
+                    ),
+                  ),
+              ],
             ),
           ),
-          if (kiCode != null && kiCode.isNotEmpty && kiCode != '-')
-            TextButton.icon(
-              onPressed: () => StierInfoDialog.show(context, kiCode, value),
-              icon: const Icon(Icons.info_outline, size: 16),
-              label: const Text('Meer info'),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                foregroundColor: AppTheme.primary,
-              ),
-            ),
         ],
       ),
     );
