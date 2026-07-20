@@ -56,6 +56,34 @@ class MyApp extends StatelessWidget {
 }
 
 // ==================== DATAMODEL ====================
+class LocatieConfig {
+  final String id;
+  final String ubn;
+  final String bedrijfsnaam;
+  final String alias;
+
+  LocatieConfig({
+    required this.id,
+    required this.ubn,
+    required this.bedrijfsnaam,
+    required this.alias,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'ubn': ubn,
+    'bedrijfsnaam': bedrijfsnaam,
+    'alias': alias,
+  };
+
+  factory LocatieConfig.fromJson(Map<String, dynamic> json) => LocatieConfig(
+    id: json['id'],
+    ubn: json['ubn'],
+    bedrijfsnaam: json['bedrijfsnaam'],
+    alias: json['alias'],
+  );
+}
+
 class KoeAdvies {
   final String koe;
   final String levensnummer;
@@ -67,6 +95,7 @@ class KoeAdvies {
   final String? kiCode2;
   final String? kiCode3;
   final DateTime zoekDatum;
+  final String? locatieAlias;
 
   KoeAdvies({
     required this.koe,
@@ -79,76 +108,129 @@ class KoeAdvies {
     this.kiCode2,
     this.kiCode3,
     required this.zoekDatum,
+    this.locatieAlias,
   });
 
   Map<String, dynamic> toJson() => {
-        'koe': koe,
-        'levensnummer': levensnummer,
-        'triple': triple,
-        'advies1': advies1,
-        'advies2': advies2,
-        'advies3': advies3,
-        'kiCode1': kiCode1,
-        'kiCode2': kiCode2,
-        'kiCode3': kiCode3,
-        'zoekDatum': zoekDatum.toIso8601String(),
-      };
+    'koe': koe,
+    'levensnummer': levensnummer,
+    'triple': triple,
+    'advies1': advies1,
+    'advies2': advies2,
+    'advies3': advies3,
+    'kiCode1': kiCode1,
+    'kiCode2': kiCode2,
+    'kiCode3': kiCode3,
+    'zoekDatum': zoekDatum.toIso8601String(),
+    'locatieAlias': locatieAlias,
+  };
 
   factory KoeAdvies.fromJson(Map<String, dynamic> json) => KoeAdvies(
-        koe: json['koe'] ?? '',
-        levensnummer: json['levensnummer'] ?? '',
-        triple: json['triple'] ?? '',
-        advies1: json['advies1'] ?? '',
-        advies2: json['advies2'] ?? '',
-        advies3: json['advies3'] ?? '',
-        kiCode1: json['kiCode1'],
-        kiCode2: json['kiCode2'],
-        kiCode3: json['kiCode3'],
-        zoekDatum: DateTime.parse(json['zoekDatum']),
-      );
+    koe: json['koe'],
+    levensnummer: json['levensnummer'],
+    triple: json['triple'],
+    advies1: json['advies1'],
+    advies2: json['advies2'],
+    advies3: json['advies3'],
+    kiCode1: json['kiCode1'],
+    kiCode2: json['kiCode2'],
+    kiCode3: json['kiCode3'],
+    zoekDatum: DateTime.parse(json['zoekDatum']),
+    locatieAlias: json['locatieAlias'],
+  );
 }
 
-// ==================== STORAGE SERVICE ====================
 class StorageService {
   static const String _geschiedenisKey = 'zoek_geschiedenis';
   static const String _favorietenKey = 'favorieten';
-  static const String _xmlDataKey = 'opgeslagen_xml';
-  static const String _xmlPadKey = 'xml_bestand_pad';
-  static const String _ubnKey = 'opgeslagen_ubn';
+  static const String _locatiesKey = 'opgeslagen_locaties';
 
-  static Future<void> saveXmlData(List<Map<String, String>> xmlData, String bestandPad) async {
+  static Future<List<LocatieConfig>> getLocaties() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = prefs.getStringList(_locatiesKey);
+    if (jsonList == null) return [];
+    return jsonList
+        .map((json) => LocatieConfig.fromJson(jsonDecode(json)))
+        .toList();
+  }
+
+  static Future<void> saveLocaties(List<LocatieConfig> locaties) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = locaties.map((l) => jsonEncode(l.toJson())).toList();
+    await prefs.setStringList(_locatiesKey, jsonList);
+  }
+
+  static Future<void> addLocatie(LocatieConfig config) async {
+    final locaties = await getLocaties();
+    locaties.removeWhere((l) => l.id == config.id);
+    locaties.add(config);
+    await saveLocaties(locaties);
+  }
+
+  static Future<void> removeLocatie(String id) async {
+    final locaties = await getLocaties();
+    locaties.removeWhere((l) => l.id == id);
+    await saveLocaties(locaties);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('xmlData_$id');
+    await prefs.remove('xmlPad_$id');
+  }
+
+  static Future<void> saveXmlDataForLocatie(
+    String id,
+    List<Map<String, String>> xmlData,
+    String bestandPad,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = xmlData.map((row) => jsonEncode(row)).toList();
-    await prefs.setStringList(_xmlDataKey, jsonList);
-    await prefs.setString(_xmlPadKey, bestandPad);
+    await prefs.setStringList('xmlData_$id', jsonList);
+    await prefs.setString('xmlPad_$id', bestandPad);
   }
 
-  static Future<List<Map<String, String>>?> getXmlData() async {
+  static Future<List<Map<String, String>>?> getXmlDataForLocatie(
+    String id,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonList = prefs.getStringList(_xmlDataKey);
+    final jsonList = prefs.getStringList('xmlData_$id');
     if (jsonList == null) return null;
-    return jsonList.map((json) => Map<String, String>.from(jsonDecode(json))).toList();
+    return jsonList
+        .map((json) => Map<String, String>.from(jsonDecode(json)))
+        .toList();
   }
 
-  static Future<String?> getXmlPad() async {
+  static Future<String?> getXmlPadForLocatie(String id) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_xmlPadKey);
+    return prefs.getString('xmlPad_$id');
   }
 
-  static Future<void> clearXmlData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_xmlDataKey);
-    await prefs.remove(_xmlPadKey);
+  static Future<List<Map<String, String>>> getAllCombinedXmlData() async {
+    final locaties = await getLocaties();
+    List<Map<String, String>> combined = [];
+
+    for (var loc in locaties) {
+      final data = await getXmlDataForLocatie(loc.id);
+      if (data != null) {
+        for (var row in data) {
+          row['LocatieAlias'] = loc.alias;
+          combined.add(row);
+        }
+      }
+    }
+    return combined;
   }
 
-  static Future<void> saveUbn(String ubn) async {
+  static Future<List<KoeAdvies>> getGeschiedenis() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_ubnKey, ubn);
+    final jsonList = prefs.getStringList(_geschiedenisKey);
+    if (jsonList == null) return [];
+    return jsonList
+        .map((json) => KoeAdvies.fromJson(jsonDecode(json)))
+        .toList();
   }
 
-  static Future<String?> getUbn() async {
+  static Future<void> clearGeschiedenis() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_ubnKey);
+    await prefs.remove(_geschiedenisKey);
   }
 
   static Future<void> saveZoekopdracht(KoeAdvies advies) async {
@@ -161,38 +243,31 @@ class StorageService {
     await prefs.setStringList(_geschiedenisKey, jsonList);
   }
 
-  static Future<List<KoeAdvies>> getGeschiedenis() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonList = prefs.getStringList(_geschiedenisKey) ?? [];
-    return jsonList.map((json) => KoeAdvies.fromJson(jsonDecode(json))).toList();
-  }
-
-  static Future<void> clearGeschiedenis() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_geschiedenisKey);
-  }
-
-  static Future<void> toggleFavoriet(KoeAdvies advies) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<KoeAdvies> favorieten = await getFavorieten();
-    if (favorieten.any((f) => f.koe == advies.koe)) {
-      favorieten.removeWhere((f) => f.koe == advies.koe);
-    } else {
-      favorieten.add(advies);
-    }
-    final jsonList = favorieten.map((f) => jsonEncode(f.toJson())).toList();
-    await prefs.setStringList(_favorietenKey, jsonList);
-  }
-
   static Future<List<KoeAdvies>> getFavorieten() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonList = prefs.getStringList(_favorietenKey) ?? [];
-    return jsonList.map((json) => KoeAdvies.fromJson(jsonDecode(json))).toList();
+    final jsonList = prefs.getStringList(_favorietenKey);
+    if (jsonList == null) return [];
+    return jsonList
+        .map((json) => KoeAdvies.fromJson(jsonDecode(json)))
+        .toList();
   }
 
   static Future<bool> isFavoriet(String koeNummer) async {
     final favorieten = await getFavorieten();
     return favorieten.any((f) => f.koe == koeNummer);
+  }
+
+  static Future<void> toggleFavoriet(KoeAdvies advies) async {
+    final prefs = await SharedPreferences.getInstance();
+    List<KoeAdvies> favorieten = await getFavorieten();
+    final isFav = favorieten.any((f) => f.koe == advies.koe);
+    if (isFav) {
+      favorieten.removeWhere((f) => f.koe == advies.koe);
+    } else {
+      favorieten.insert(0, advies);
+    }
+    final jsonList = favorieten.map((f) => jsonEncode(f.toJson())).toList();
+    await prefs.setStringList(_favorietenKey, jsonList);
   }
 }
 
@@ -204,7 +279,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
@@ -217,13 +293,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       vsync: this,
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
 
-    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 0.5,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
 
     _controller.forward();
 
@@ -236,13 +314,16 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     final hasCleared = prefs.getBool('v15_cleared') ?? false;
 
     if (!hasCleared) {
-      await StorageService.clearXmlData();
+      final locaties = await StorageService.getLocaties();
+      for (var loc in locaties) {
+        await StorageService.removeLocatie(loc.id);
+      }
       await StorageService.clearGeschiedenis();
       await prefs.remove(StorageService._favorietenKey);
       await prefs.setBool('v15_cleared', true);
     }
 
-    final opgeslagenXml = await StorageService.getXmlData();
+    final opgeslagenXml = await StorageService.getAllCombinedXmlData();
 
     await Future.delayed(const Duration(seconds: 2));
 
@@ -257,9 +338,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       } else {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) => const StartScreen(),
-          ),
+          MaterialPageRoute(builder: (context) => const LocatiesScreen()),
         );
       }
     }
@@ -302,12 +381,17 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(20.0),
-                        child: Image.asset('assets/icon.png', fit: BoxFit.contain),
+                        child: Image.asset(
+                          'assets/icon.png',
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 40),
                     const CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppTheme.primary,
+                      ),
                     ),
                   ],
                 ),
@@ -329,52 +413,119 @@ class XmlFileInfo {
   XmlFileInfo(this.fileName, this.lastModified, this.parsedDate);
 }
 
-class StartScreen extends StatefulWidget {
-  const StartScreen({super.key});
+class LocatiesScreen extends StatefulWidget {
+  const LocatiesScreen({super.key});
 
   @override
-  State<StartScreen> createState() => _StartScreenState();
+  State<LocatiesScreen> createState() => _LocatiesScreenState();
 }
 
-class _StartScreenState extends State<StartScreen> {
-  final TextEditingController _ubnController = TextEditingController();
+class _LocatiesScreenState extends State<LocatiesScreen> {
+  List<LocatieConfig> _locaties = [];
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _loadSavedUbn();
+    _loadLocaties();
   }
 
-  Future<void> _loadSavedUbn() async {
-    final savedUbn = await StorageService.getUbn();
-    if (savedUbn != null && savedUbn.isNotEmpty) {
-      setState(() {
-        _ubnController.text = savedUbn;
-      });
-    }
-  }
-
-  Future<void> _fetchDirectoryData(BuildContext context) async {
-    final ubn = _ubnController.text.trim();
-    if (ubn.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vul alstublieft een UBN in')),
-      );
-      return;
-    }
-
+  Future<void> _loadLocaties() async {
+    final locs = await StorageService.getLocaties();
     setState(() {
-      _isLoading = true;
+      _locaties = locs;
     });
+  }
+
+  void _showAddLocatieDialog() {
+    final ubnCtrl = TextEditingController();
+    final bedrijfsnaamCtrl = TextEditingController();
+    final aliasCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text(
+          'Nieuwe Locatie Toevoegen',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: ubnCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'UBN Nummer',
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
+            ),
+            TextField(
+              controller: bedrijfsnaamCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Bedrijfsnaam',
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
+            ),
+            TextField(
+              controller: aliasCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Locatienaam',
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Annuleren',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final u = ubnCtrl.text.trim();
+              final b = bedrijfsnaamCtrl.text.trim();
+              final a = aliasCtrl.text.trim();
+              if (u.isEmpty || b.isEmpty || a.isEmpty) return;
+              Navigator.pop(ctx);
+              _addLocatie(u, b, a);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+            child: const Text(
+              'Toevoegen',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addLocatie(
+    String ubn,
+    String bedrijfsnaam,
+    String alias,
+  ) async {
+    setState(() => _isLoading = true);
+
+    final folderName = "$ubn - $bedrijfsnaam";
+    final dirUrl = Uri.parse('http://212.227.3.89/GGI/$folderName/');
 
     try {
-      final dirUrl = Uri.parse('http://212.227.3.89/GGI/$ubn/');
-      final response = await http.get(dirUrl, headers: {'X-GGI-App': 'True'}).timeout(const Duration(seconds: 15));
-
+      final response = await http
+          .get(dirUrl, headers: {'X-GGI-App': 'True'})
+          .timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final htmlContent = response.body;
-        final regex = RegExp(r'<a href="([^"]+\.xml)">.*?</a>.*?<td align="right">\s*([^<]+?)\s*</td>');
+        final regex = RegExp(
+          r'<a href="([^"]+\.xml)">.*?</a>.*?<td align="right">\s*([^<]+?)\s*</td>',
+        );
         final matches = regex.allMatches(htmlContent);
 
         List<XmlFileInfo> files = [];
@@ -383,9 +534,9 @@ class _StartScreenState extends State<StartScreen> {
           final dateStr = match.group(2)!.trim();
           DateTime? parsedDate;
           try {
-             parsedDate = DateTime.parse(dateStr);
+            parsedDate = DateTime.parse(dateStr);
           } catch (e) {
-             parsedDate = DateTime.fromMillisecondsSinceEpoch(0);
+            parsedDate = DateTime.fromMillisecondsSinceEpoch(0);
           }
           files.add(XmlFileInfo(fileName, dateStr, parsedDate));
         }
@@ -393,95 +544,103 @@ class _StartScreenState extends State<StartScreen> {
         if (files.isEmpty) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Geen XML bestanden gevonden voor dit UBN.')),
+              const SnackBar(
+                content: Text('Geen XML bestanden gevonden voor deze locatie.'),
+              ),
             );
           }
-          return;
-        }
-        await StorageService.saveUbn(ubn);
-        files.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
-
-        if (files.length == 1) {
-          await _downloadSpecificFile(ubn, files.first.fileName);
         } else {
+          files.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
           if (mounted) {
-            _showFileSelectionBottomSheet(context, ubn, files);
+            _showFileSelectionBottomSheet(
+              context,
+              ubn,
+              bedrijfsnaam,
+              alias,
+              folderName,
+              files,
+            );
           }
         }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Kan geen gegevens vinden voor dit UBN. Controleer het nummer.')),
+            const SnackBar(
+              content: Text(
+                'Kan locatie niet vinden op de server. Controleer UBN en Bedrijfsnaam.',
+              ),
+            ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Netwerkfout: kan niet verbinden met de server. Probeer het later opnieuw. \n($e)')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Netwerkfout: $e')));
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showFileSelectionBottomSheet(BuildContext context, String ubn, List<XmlFileInfo> files) {
+  void _showFileSelectionBottomSheet(
+    BuildContext context,
+    String ubn,
+    String bedrijfsnaam,
+    String alias,
+    String folderName,
+    List<XmlFileInfo> files,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
-        return SafeArea(
+      builder: (BuildContext ctx) {
+        return Container(
+          padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'Selecteer een bestand',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                  ),
+              const Text(
+                'Kies een XML bestand',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
-              const Divider(color: AppTheme.border),
-              Flexible(
+              const SizedBox(height: 10),
+              Expanded(
                 child: ListView.builder(
                   shrinkWrap: true,
                   itemCount: files.length,
                   itemBuilder: (context, index) {
                     final file = files[index];
-                    final isNewest = index == 0;
                     return ListTile(
-                      leading: const Icon(Icons.description, color: AppTheme.primary),
-                      title: Text(file.fileName, style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold)),
-                      subtitle: Text('Datum: ${file.lastModified}', style: const TextStyle(color: AppTheme.textSecondary)),
-                      trailing: isNewest 
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.green),
-                            ),
-                            child: const Text('Nieuwste', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
-                          )
-                        : null,
+                      leading: const Icon(
+                        Icons.insert_drive_file,
+                        color: AppTheme.primary,
+                      ),
+                      title: Text(
+                        file.fileName,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        'Gewijzigd: ${file.lastModified}',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
                       onTap: () {
-                        Navigator.pop(context);
-                        setState(() { _isLoading = true; });
-                        _downloadSpecificFile(ubn, file.fileName).whenComplete(() {
-                          if (mounted) setState(() { _isLoading = false; });
-                        });
+                        Navigator.pop(ctx);
+                        _downloadSpecificFile(
+                          ubn,
+                          bedrijfsnaam,
+                          alias,
+                          folderName,
+                          file.fileName,
+                        );
                       },
                     );
                   },
@@ -494,208 +653,215 @@ class _StartScreenState extends State<StartScreen> {
     );
   }
 
-  Future<void> _downloadSpecificFile(String ubn, String fileName) async {
+  Future<void> _downloadSpecificFile(
+    String ubn,
+    String bedrijfsnaam,
+    String alias,
+    String folderName,
+    String fileName,
+  ) async {
+    setState(() => _isLoading = true);
     try {
-      final fileUrl = Uri.parse('http://212.227.3.89/GGI/${ubn}/${fileName}');
-      final response = await http.get(fileUrl, headers: {'X-GGI-App': 'True'}).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) {
-        final xmlString = response.body;
-        await _parseAndSaveXml(xmlString, 'Server XML: ${fileName}');
-      } else {
+      final fileUrl = Uri.parse(
+        'http://212.227.3.89/GGI/$folderName/$fileName',
+      );
+      final fileResponse = await http
+          .get(fileUrl, headers: {'X-GGI-App': 'True'})
+          .timeout(const Duration(seconds: 15));
+
+      if (fileResponse.statusCode == 200) {
+        List<Map<String, String>> parsedData = [];
+        final document = XmlDocument.parse(fileResponse.body);
+        final cows = document.findAllElements('cows');
+
+        for (var cow in cows) {
+          String rawEarTag =
+              cow.findElements('EarTag').firstOrNull?.innerText ?? '';
+          String digitsOnly = rawEarTag.replaceAll(RegExp(r'\D'), '');
+          String werknummer = digitsOnly.length >= 8
+              ? digitsOnly.substring(4, 8)
+              : digitsOnly;
+
+          parsedData.add({
+            'CowNumber':
+                cow.findElements('CowNumber').firstOrNull?.innerText ?? '',
+            'EarTag': rawEarTag,
+            'Werknummer': werknummer,
+            'Triple':
+                cow.findElements('triple').firstOrNull?.innerText ??
+                cow.findElements('Triple').firstOrNull?.innerText ??
+                cow.findElements('TripleA').firstOrNull?.innerText ??
+                '',
+            'Sire': cow.findElements('Sire').firstOrNull?.innerText ?? '',
+            'NameBull1':
+                cow.findElements('NameBull1').firstOrNull?.innerText ?? '',
+            'NameBull2':
+                cow.findElements('NameBull2').firstOrNull?.innerText ?? '',
+            'NameBull3':
+                cow.findElements('NameBull3').firstOrNull?.innerText ?? '',
+            'AICodeBull1':
+                cow.findElements('AICodeBull1').firstOrNull?.innerText ?? '',
+            'AICodeBull2':
+                cow.findElements('AICodeBull2').firstOrNull?.innerText ?? '',
+            'AICodeBull3':
+                cow.findElements('AICodeBull3').firstOrNull?.innerText ?? '',
+          });
+        }
+
+        final config = LocatieConfig(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          ubn: ubn,
+          bedrijfsnaam: bedrijfsnaam,
+          alias: alias,
+        );
+
+        await StorageService.addLocatie(config);
+        await StorageService.saveXmlDataForLocatie(
+          config.id,
+          parsedData,
+          'Server XML: $fileName',
+        );
+
+        await _loadLocaties();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Kan het geselecteerde bestand niet downloaden.')),
+            SnackBar(content: Text('Locatie $alias succesvol toegevoegd!')),
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fout tijdens downloaden van bestand: ${e}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Fout bij verwerken XML: $e')));
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _pickXmlFile(BuildContext context) async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xml'],
-    );
-
-    if (result != null) {
-      File file = File(result.files.single.path!);
-      String xmlString = await file.readAsString();
-      await _parseAndSaveXml(xmlString, result.files.single.path!);
-    }
+  void _verwijderLocatie(String id) async {
+    await StorageService.removeLocatie(id);
+    await _loadLocaties();
   }
 
-  Future<void> _parseAndSaveXml(String xmlString, String filePath) async {
-    List<Map<String, String>> parsedData = [];
-    try {
-      final document = XmlDocument.parse(xmlString);
-      final cows = document.findAllElements('cows');
-      for (var cow in cows) {
-        String rawEarTag = cow.findElements('EarTag').firstOrNull?.innerText ?? '';
-        String digitsOnly = rawEarTag.replaceAll(RegExp(r'\D'), '');
-        String werknummer = '';
-        if (digitsOnly.length >= 8) {
-          werknummer = digitsOnly.substring(4, 8);
-        } else {
-          werknummer = digitsOnly;
-        }
-
-        parsedData.add({
-          'CowNumber': cow.findElements('CowNumber').firstOrNull?.innerText ?? '',
-          'EarTag': rawEarTag,
-          'Werknummer': werknummer,
-          'Triple': cow.findElements('triple').firstOrNull?.innerText ?? cow.findElements('Triple').firstOrNull?.innerText ?? cow.findElements('TripleA').firstOrNull?.innerText ?? '',
-          'Sire': cow.findElements('Sire').firstOrNull?.innerText ?? '',
-          'NameBull1': cow.findElements('NameBull1').firstOrNull?.innerText ?? '',
-          'NameBull2': cow.findElements('NameBull2').firstOrNull?.innerText ?? '',
-          'NameBull3': cow.findElements('NameBull3').firstOrNull?.innerText ?? '',
-          'AICodeBull1': cow.findElements('AICodeBull1').firstOrNull?.innerText ?? '',
-          'AICodeBull2': cow.findElements('AICodeBull2').firstOrNull?.innerText ?? '',
-          'AICodeBull3': cow.findElements('AICodeBull3').firstOrNull?.innerText ?? '',
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fout bij inlezen XML: ${e}')),
-        );
-      }
-      return;
-    }
-
-    await StorageService.saveXmlData(parsedData, filePath);
-
+  void _gaNaarZoeken() async {
+    final combinedData = await StorageService.getAllCombinedXmlData();
     if (mounted) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => MainScreen(xmlData: parsedData),
+          builder: (context) => MainScreen(xmlData: combinedData),
         ),
       );
     }
   }
 
   @override
-  void dispose() {
-    _ubnController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(30.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+      appBar: AppBar(
+        title: const Text(
+          'Mijn Locaties',
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: AppTheme.background,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primary),
+            )
+          : Column(
               children: [
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primary.withValues(alpha: 0.2),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Image.asset('assets/icon.png', fit: BoxFit.contain),
-                  ),
-                ),
-                const SizedBox(height: 40),
-                const Text(
-                  'Welkom bij GGI Holland',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Vul uw UBN-nummer in om de paringsadviezen op te halen.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 40),
-                TextField(
-                  controller: _ubnController,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18),
-                  textAlign: TextAlign.center,
-                  decoration: InputDecoration(
-                    labelText: 'UBN',
-                    labelStyle: const TextStyle(color: AppTheme.textSecondary),
-                    filled: true,
-                    fillColor: AppTheme.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppTheme.primary, width: 2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _isLoading
-                    ? const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary))
-                    : ElevatedButton.icon(
-                        onPressed: () => _fetchDirectoryData(context),
-                        icon: const Icon(Icons.cloud_download, size: 28, color: Colors.white),
-                        label: const Text(
-                          'Gegevens ophalen',
-                          style: TextStyle(fontSize: 18, color: Colors.white),
+                Expanded(
+                  child: _locaties.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'Geen locaties gevonden.\nVoeg er een toe om te beginnen.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _locaties.length,
+                          itemBuilder: (context, index) {
+                            final loc = _locaties[index];
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              color: AppTheme.surface,
+                              child: ListTile(
+                                title: Text(
+                                  loc.alias,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  '${loc.ubn} - ${loc.bedrijfsnaam}',
+                                  style: const TextStyle(color: Colors.white70),
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(
+                                    Icons.delete,
+                                    color: Colors.redAccent,
+                                  ),
+                                  onPressed: () => _verwijderLocatie(loc.id),
+                                ),
+                              ),
+                            );
+                          },
                         ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      ElevatedButton(
+                        onPressed: _showAddLocatieDialog,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white24,
+                          minimumSize: const Size.fromHeight(50),
+                        ),
+                        child: const Text(
+                          'Locatie Toevoegen',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: _locaties.isNotEmpty ? _gaNaarZoeken : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primary,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 40,
-                            vertical: 16,
+                          minimumSize: const Size.fromHeight(50),
+                        ),
+                        child: const Text(
+                          'Ga naar Zoeken',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          minimumSize: const Size(double.infinity, 60),
                         ),
                       ),
-                const SizedBox(height: 30),
-                TextButton(
-                  onPressed: () => _pickXmlFile(context),
-                  child: const Text(
-                    'Of selecteer handmatig een XML-bestand',
-                    style: TextStyle(color: AppTheme.textSecondary, decoration: TextDecoration.underline),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ),
-      ),
     );
   }
 }
 
 // ==================== MAIN SCREEN MET TABS ====================
+
 class MainScreen extends StatefulWidget {
   final List<Map<String, String>> xmlData;
 
@@ -718,109 +884,161 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _checkForUpdatesInBackground() async {
     try {
-      final ubn = await StorageService.getUbn();
-      final xmlPad = await StorageService.getXmlPad();
-      if (ubn == null || ubn.isEmpty || xmlPad == null || !xmlPad.startsWith('Server XML: ')) return;
+      final locaties = await StorageService.getLocaties();
+      if (locaties.isEmpty) return;
 
-      final dirUrl = Uri.parse('http://212.227.3.89/GGI/$ubn/');
-      final response = await http.get(dirUrl, headers: {'X-GGI-App': 'True'}).timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200) return;
+      for (var loc in locaties) {
+        final xmlPad = await StorageService.getXmlPadForLocatie(loc.id);
+        if (xmlPad == null || !xmlPad.startsWith('Server XML: ')) continue;
 
-      final htmlContent = response.body;
-      final regex = RegExp(r'<a href="([^"]+\.xml)">.*?</a>.*?<td align="right">\s*([^<]+?)\s*</td>');
-      final matches = regex.allMatches(htmlContent);
+        final folderName = "${loc.ubn} - ${loc.bedrijfsnaam}";
+        final dirUrl = Uri.parse('http://212.227.3.89/GGI/$folderName/');
+        final response = await http
+            .get(dirUrl, headers: {'X-GGI-App': 'True'})
+            .timeout(const Duration(seconds: 15));
+        if (response.statusCode != 200) continue;
 
-      List<XmlFileInfo> files = [];
-      for (var match in matches) {
-        final fileName = match.group(1)!;
-        final dateStr = match.group(2)!.trim();
-        DateTime? parsedDate;
-        try {
-           parsedDate = DateTime.parse(dateStr);
-        } catch (e) {
-           parsedDate = DateTime.fromMillisecondsSinceEpoch(0);
-        }
-        files.add(XmlFileInfo(fileName, dateStr, parsedDate));
-      }
-
-      if (files.isEmpty) return;
-      files.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
-      
-      final newestFileName = files.first.fileName;
-      if (xmlPad == 'Server XML: $newestFileName') return; // Al nieuwste bestand
-
-      // Nieuw bestand gevonden! Toon een melding aan de boer
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: const Text('Nieuw stieradvies gevonden'),
-              content: Text('Er is een nieuwer bestand gevonden op de server ($newestFileName).\nWilt u deze nu inladen?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Later'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _downloadAndUpdateXml(ubn, newestFileName);
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-                  child: const Text('Nu inladen', style: TextStyle(color: Colors.white)),
-                ),
-              ],
-            );
-          },
+        final htmlContent = response.body;
+        final regex = RegExp(
+          r'<a href="([^"]+\.xml)">.*?</a>.*?<td align="right">\s*([^<]+?)\s*</td>',
         );
+        final matches = regex.allMatches(htmlContent);
+
+        List<XmlFileInfo> files = [];
+        for (var match in matches) {
+          final fileName = match.group(1)!;
+          final dateStr = match.group(2)!.trim();
+          DateTime? parsedDate;
+          try {
+            parsedDate = DateTime.parse(dateStr);
+          } catch (e) {
+            parsedDate = DateTime.fromMillisecondsSinceEpoch(0);
+          }
+          files.add(XmlFileInfo(fileName, dateStr, parsedDate));
+        }
+
+        if (files.isEmpty) continue;
+        files.sort((a, b) => b.parsedDate.compareTo(a.parsedDate));
+
+        final newestFileName = files.first.fileName;
+        if (xmlPad == 'Server XML: $newestFileName') continue;
+
+        if (mounted) {
+          await showDialog(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                backgroundColor: AppTheme.surface,
+                title: Text(
+                  'Nieuw advies voor ${loc.alias}',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                content: Text(
+                  'Er is een nieuwer bestand gevonden op de server ($newestFileName).\nWilt u deze nu inladen?',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Later',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _downloadAndUpdateXml(loc, newestFileName);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                    ),
+                    child: const Text(
+                      'Nu inladen',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        }
       }
     } catch (e) {
-      // Fout negeren op de achtergrond
+      // Ignore
     }
   }
 
-  Future<void> _downloadAndUpdateXml(String ubn, String newestFileName) async {
+  Future<void> _downloadAndUpdateXml(
+    LocatieConfig loc,
+    String newestFileName,
+  ) async {
     try {
-      final fileUrl = Uri.parse('http://212.227.3.89/GGI/$ubn/$newestFileName');
-      final fileResponse = await http.get(fileUrl, headers: {'X-GGI-App': 'True'}).timeout(const Duration(seconds: 15));
+      final folderName = "${loc.ubn} - ${loc.bedrijfsnaam}";
+      final fileUrl = Uri.parse(
+        'http://212.227.3.89/GGI/$folderName/$newestFileName',
+      );
+      final fileResponse = await http
+          .get(fileUrl, headers: {'X-GGI-App': 'True'})
+          .timeout(const Duration(seconds: 15));
       if (fileResponse.statusCode != 200) return;
 
-      // Parse XML
       List<Map<String, String>> parsedData = [];
       final document = XmlDocument.parse(fileResponse.body);
       final cows = document.findAllElements('cows');
       for (var cow in cows) {
-        String rawEarTag = cow.findElements('EarTag').firstOrNull?.innerText ?? '';
+        String rawEarTag =
+            cow.findElements('EarTag').firstOrNull?.innerText ?? '';
         String digitsOnly = rawEarTag.replaceAll(RegExp(r'\D'), '');
-        String werknummer = digitsOnly.length >= 8 ? digitsOnly.substring(4, 8) : digitsOnly;
+        String werknummer = digitsOnly.length >= 8
+            ? digitsOnly.substring(4, 8)
+            : digitsOnly;
         parsedData.add({
-          'CowNumber': cow.findElements('CowNumber').firstOrNull?.innerText ?? '',
+          'CowNumber':
+              cow.findElements('CowNumber').firstOrNull?.innerText ?? '',
           'EarTag': rawEarTag,
           'Werknummer': werknummer,
-          'Triple': cow.findElements('triple').firstOrNull?.innerText ?? cow.findElements('Triple').firstOrNull?.innerText ?? cow.findElements('TripleA').firstOrNull?.innerText ?? '',
+          'Triple':
+              cow.findElements('triple').firstOrNull?.innerText ??
+              cow.findElements('Triple').firstOrNull?.innerText ??
+              cow.findElements('TripleA').firstOrNull?.innerText ??
+              '',
           'Sire': cow.findElements('Sire').firstOrNull?.innerText ?? '',
-          'NameBull1': cow.findElements('NameBull1').firstOrNull?.innerText ?? '',
-          'NameBull2': cow.findElements('NameBull2').firstOrNull?.innerText ?? '',
-          'NameBull3': cow.findElements('NameBull3').firstOrNull?.innerText ?? '',
-          'AICodeBull1': cow.findElements('AICodeBull1').firstOrNull?.innerText ?? '',
-          'AICodeBull2': cow.findElements('AICodeBull2').firstOrNull?.innerText ?? '',
-          'AICodeBull3': cow.findElements('AICodeBull3').firstOrNull?.innerText ?? '',
+          'NameBull1':
+              cow.findElements('NameBull1').firstOrNull?.innerText ?? '',
+          'NameBull2':
+              cow.findElements('NameBull2').firstOrNull?.innerText ?? '',
+          'NameBull3':
+              cow.findElements('NameBull3').firstOrNull?.innerText ?? '',
+          'AICodeBull1':
+              cow.findElements('AICodeBull1').firstOrNull?.innerText ?? '',
+          'AICodeBull2':
+              cow.findElements('AICodeBull2').firstOrNull?.innerText ?? '',
+          'AICodeBull3':
+              cow.findElements('AICodeBull3').firstOrNull?.innerText ?? '',
         });
       }
 
-      // Save and update
-      await StorageService.saveXmlData(parsedData, 'Server XML: $newestFileName');
+      await StorageService.saveXmlDataForLocatie(
+        loc.id,
+        parsedData,
+        'Server XML: $newestFileName',
+      );
+      final combined = await StorageService.getAllCombinedXmlData();
       if (mounted) {
         setState(() {
-          _currentXmlData = parsedData;
+          _currentXmlData = combined;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Nieuw XML bestand succesvol ingeladen!')),
+          SnackBar(
+            content: Text(
+              'Nieuw XML bestand voor ${loc.alias} succesvol ingeladen!',
+            ),
+          ),
         );
       }
     } catch (e) {
-      // Fout negeren op de achtergrond
+      // Ignore
     }
   }
 
@@ -831,8 +1049,12 @@ class _MainScreenState extends State<MainScreen> {
         index: _currentIndex,
         children: [
           SearchScreen(xmlData: _currentXmlData),
-          _currentIndex == 1 ? const GeschiedenisScreen() : const SizedBox.shrink(),
-          _currentIndex == 2 ? const FavorietenScreen() : const SizedBox.shrink(),
+          _currentIndex == 1
+              ? const GeschiedenisScreen()
+              : const SizedBox.shrink(),
+          _currentIndex == 2
+              ? const FavorietenScreen()
+              : const SizedBox.shrink(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -867,7 +1089,10 @@ class _MainScreenState extends State<MainScreen> {
 }
 
 // ==================== GEMEENSCHAPPELIJKE APPBAR ====================
-AppBar buildGGIAppBar(BuildContext context, {required VoidCallback onNieuwXml}) {
+AppBar buildGGIAppBar(
+  BuildContext context, {
+  required VoidCallback onNieuwXml,
+}) {
   return AppBar(
     title: Row(
       children: [
@@ -933,9 +1158,12 @@ class _SearchScreenState extends State<SearchScreen> {
 
     final String searchKey = _searchByWerknummer ? 'Werknummer' : 'CowNumber';
 
-    final matches = widget.xmlData.where((cow) {
-      return cow[searchKey]?.startsWith(query) ?? false;
-    }).take(5).toList();
+    final matches = widget.xmlData
+        .where((cow) {
+          return cow[searchKey]?.startsWith(query) ?? false;
+        })
+        .take(5)
+        .toList();
 
     if (matches.isNotEmpty) {
       _showDropdown(matches);
@@ -946,7 +1174,8 @@ class _SearchScreenState extends State<SearchScreen> {
     if (!mounted) return;
     _hideDropdown();
 
-    final RenderBox renderBox = _searchFieldKey.currentContext!.findRenderObject() as RenderBox;
+    final RenderBox renderBox =
+        _searchFieldKey.currentContext!.findRenderObject() as RenderBox;
     final size = renderBox.size;
     final offset = renderBox.localToGlobal(Offset.zero);
 
@@ -968,20 +1197,29 @@ class _SearchScreenState extends State<SearchScreen> {
               padding: EdgeInsets.zero,
               shrinkWrap: true,
               itemCount: matches.length,
-              separatorBuilder: (context, index) => const Divider(height: 1, color: AppTheme.border),
+              separatorBuilder: (context, index) =>
+                  const Divider(height: 1, color: AppTheme.border),
               itemBuilder: (context, index) {
                 final match = matches[index];
                 return ListTile(
                   title: Text(
-                    _searchByWerknummer 
+                    _searchByWerknummer
                         ? 'Werknummer: ${match['Werknummer']} (Halsband: ${match['CowNumber']})'
                         : 'Halsband: ${match['CowNumber']} (Werknummer: ${match['Werknummer']})',
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
-                  subtitle: Text('Stier: ${match['Sire']}', style: const TextStyle(color: AppTheme.textSecondary)),
+                  subtitle: Text(
+                    'Stier: ${match['Sire']}',
+                    style: const TextStyle(color: AppTheme.textSecondary),
+                  ),
                   onTap: () {
                     _hideDropdown();
-                    _searchController.text = _searchByWerknummer ? match['Werknummer'] ?? '' : match['CowNumber'] ?? '';
+                    _searchController.text = _searchByWerknummer
+                        ? match['Werknummer'] ?? ''
+                        : match['CowNumber'] ?? '';
                     _selectCow(match);
                   },
                 );
@@ -1028,10 +1266,10 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<void> _toggleFavoriet() async {
     if (_result == null) return;
-    
+
     final advies = KoeAdvies.fromJson(_result!);
     await StorageService.toggleFavoriet(advies);
-    
+
     final isFav = await StorageService.isFavoriet(advies.koe);
     setState(() {
       _isFavoriet = isFav;
@@ -1041,7 +1279,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void _nieuwXmlSelecteren() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const StartScreen()),
+      MaterialPageRoute(builder: (context) => const LocatiesScreen()),
     );
   }
 
@@ -1073,144 +1311,192 @@ class _SearchScreenState extends State<SearchScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment<bool>(
-                    value: false,
-                    label: Text('Halsband'),
-                  ),
-                  ButtonSegment<bool>(
-                    value: true,
-                    label: Text('Werknummer'),
-                  ),
-                ],
-                selected: {_searchByWerknummer},
-                onSelectionChanged: (Set<bool> newSelection) {
-                  setState(() {
-                    _searchByWerknummer = newSelection.first;
-                    _onSearchChanged(_searchController.text);
-                  });
-                },
-                style: SegmentedButton.styleFrom(
-                  selectedForegroundColor: AppTheme.textPrimary,
-                  selectedBackgroundColor: AppTheme.primary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                key: _searchFieldKey,
-                controller: _searchController,
-                focusNode: _focusNode,
-                keyboardType: TextInputType.number,
-                onChanged: _onSearchChanged,
-                style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: InputDecoration(
-                  labelText: _searchByWerknummer ? 'Werknummer' : 'Halsband',
-                  labelStyle: const TextStyle(color: AppTheme.textSecondary),
-                  hintText: _searchByWerknummer ? 'Begin met typen... (bijv. 6712)' : 'Begin met typen... (bijv. 77)',
-                  hintStyle: const TextStyle(color: AppTheme.border),
-                  prefixIcon: const Icon(Icons.search, color: AppTheme.primary),
-                  filled: true,
-                  fillColor: AppTheme.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppTheme.primary, width: 2),
-                  ),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.clear, color: AppTheme.textSecondary),
-                    onPressed: () {
-                      _searchController.clear();
-                      _hideDropdown();
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment<bool>(
+                        value: false,
+                        label: Text('Halsband'),
+                      ),
+                      ButtonSegment<bool>(
+                        value: true,
+                        label: Text('Werknummer'),
+                      ),
+                    ],
+                    selected: {_searchByWerknummer},
+                    onSelectionChanged: (Set<bool> newSelection) {
                       setState(() {
-                        _result = null;
+                        _searchByWerknummer = newSelection.first;
+                        _onSearchChanged(_searchController.text);
                       });
                     },
+                    style: SegmentedButton.styleFrom(
+                      selectedForegroundColor: AppTheme.textPrimary,
+                      selectedBackgroundColor: AppTheme.primary,
+                    ),
                   ),
-                ),
-              ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    key: _searchFieldKey,
+                    controller: _searchController,
+                    focusNode: _focusNode,
+                    keyboardType: TextInputType.number,
+                    onChanged: _onSearchChanged,
+                    style: const TextStyle(color: AppTheme.textPrimary),
+                    decoration: InputDecoration(
+                      labelText: _searchByWerknummer
+                          ? 'Werknummer'
+                          : 'Halsband',
+                      labelStyle: const TextStyle(
+                        color: AppTheme.textSecondary,
+                      ),
+                      hintText: _searchByWerknummer
+                          ? 'Begin met typen... (bijv. 6712)'
+                          : 'Begin met typen... (bijv. 77)',
+                      hintStyle: const TextStyle(color: AppTheme.border),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        color: AppTheme.primary,
+                      ),
+                      filled: true,
+                      fillColor: AppTheme.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: AppTheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      suffixIcon: IconButton(
+                        icon: const Icon(
+                          Icons.clear,
+                          color: AppTheme.textSecondary,
+                        ),
+                        onPressed: () {
+                          _searchController.clear();
+                          _hideDropdown();
+                          setState(() {
+                            _result = null;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
                 ],
               ); // End of searchControls
 
-              final resultCard = _result == null ? null : Card(
-                  elevation: 4,
-                  color: AppTheme.surface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: const BorderSide(color: AppTheme.border, width: 1),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              final resultCard = _result == null
+                  ? null
+                  : Card(
+                      elevation: 4,
+                      color: AppTheme.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: const BorderSide(
+                          color: AppTheme.border,
+                          width: 1,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primary.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(22),
-                                    border: Border.all(color: AppTheme.primary),
-                                  ),
-                                  child: const Center(
-                                    child: Text('🐄', style: TextStyle(fontSize: 24)),
-                                  ),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primary.withOpacity(
+                                          0.1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(22),
+                                        border: Border.all(
+                                          color: AppTheme.primary,
+                                        ),
+                                      ),
+                                      child: const Center(
+                                        child: Text(
+                                          '🐄',
+                                          style: TextStyle(fontSize: 24),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      'Resultaat',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.textPrimary,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  'Resultaat',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.textPrimary,
+                                IconButton(
+                                  onPressed: _toggleFavoriet,
+                                  icon: Icon(
+                                    _isFavoriet
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    color: _isFavoriet
+                                        ? AppTheme.primary
+                                        : AppTheme.textSecondary,
+                                    size: 28,
                                   ),
                                 ),
                               ],
                             ),
-                            IconButton(
-                              onPressed: _toggleFavoriet,
-                              icon: Icon(
-                                _isFavoriet ? Icons.favorite : Icons.favorite_border,
-                                color: _isFavoriet ? AppTheme.primary : AppTheme.textSecondary,
-                                size: 28,
-                              ),
+                            const Divider(height: 24, color: AppTheme.border),
+                            _buildInfoRow('Koe nummer:', _result!['koe']),
+                            _buildInfoRow(
+                              'Levensnummer:',
+                              _result!['levensnummer'],
+                            ),
+                            _buildInfoRow('aAa:', _result!['triple']),
+                            _buildInfoRow(
+                              'Advies stier 1:',
+                              _result!['advies1'],
+                              kiCode: _result!['kiCode1'],
+                            ),
+                            _buildInfoRow(
+                              'Advies stier 2:',
+                              _result!['advies2'],
+                              kiCode: _result!['kiCode2'],
+                            ),
+                            _buildInfoRow(
+                              'Advies stier 3:',
+                              _result!['advies3'],
+                              kiCode: _result!['kiCode3'],
                             ),
                           ],
                         ),
-                        const Divider(height: 24, color: AppTheme.border),
-                        _buildInfoRow('Koe nummer:', _result!['koe']),
-                        _buildInfoRow('Levensnummer:', _result!['levensnummer']),
-                        _buildInfoRow('aAa:', _result!['triple']),
-                        _buildInfoRow('Advies stier 1:', _result!['advies1'], kiCode: _result!['kiCode1']),
-                        _buildInfoRow('Advies stier 2:', _result!['advies2'], kiCode: _result!['kiCode2']),
-                        _buildInfoRow('Advies stier 3:', _result!['advies3'], kiCode: _result!['kiCode3']),
-                      ],
-                    ),
-                  ),
-                );
+                      ),
+                    );
 
               if (isTablet) {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      flex: 1,
-                      child: searchControls,
-                    ),
+                    Expanded(flex: 1, child: searchControls),
                     const SizedBox(width: 40),
                     Expanded(
                       flex: 1,
-                      child: resultCard == null 
-                        ? const Center(child: Text('Zoek en selecteer een koe om hier de resultaten te zien.', style: TextStyle(color: AppTheme.textSecondary)))
-                        : SingleChildScrollView(child: resultCard),
+                      child: resultCard == null
+                          ? const Center(
+                              child: Text(
+                                'Zoek en selecteer een koe om hier de resultaten te zien.',
+                                style: TextStyle(color: AppTheme.textSecondary),
+                              ),
+                            )
+                          : SingleChildScrollView(child: resultCard),
                     ),
                   ],
                 );
@@ -1222,11 +1508,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   searchControls,
                   const SizedBox(height: 20),
                   if (resultCard != null)
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: resultCard,
-                      ),
-                    ),
+                    Expanded(child: SingleChildScrollView(child: resultCard)),
                 ],
               );
             },
@@ -1312,7 +1594,7 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
   void _nieuwXmlSelecteren() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const StartScreen()),
+      MaterialPageRoute(builder: (context) => const LocatiesScreen()),
     );
   }
 
@@ -1328,7 +1610,10 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
                 children: [
                   Icon(Icons.history, size: 64, color: AppTheme.border),
                   const SizedBox(height: 16),
-                  const Text('Nog geen geschiedenis', style: TextStyle(color: AppTheme.textSecondary)),
+                  const Text(
+                    'Nog geen geschiedenis',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
                 ],
               ),
             )
@@ -1351,41 +1636,71 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
                     side: const BorderSide(color: AppTheme.border),
                   ),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 8,
+                    ),
                     leading: CircleAvatar(
                       backgroundColor: AppTheme.primary.withOpacity(0.1),
                       child: const Icon(Icons.history, color: AppTheme.primary),
                     ),
                     title: Text(
                       'Koe: ${item.koe}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
                     ),
                     subtitle: Text(
                       'aAa: ${item.triple}\nDatum: ${item.zoekDatum.day}-${item.zoekDatum.month}-${item.zoekDatum.year}',
                       style: const TextStyle(color: AppTheme.textSecondary),
                     ),
-                    trailing: const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
+                    trailing: const Icon(
+                      Icons.chevron_right,
+                      color: AppTheme.textSecondary,
+                    ),
                     onTap: () {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
                           backgroundColor: AppTheme.surface,
-                          title: Text('Details Koe ${item.koe}', style: const TextStyle(color: AppTheme.textPrimary)),
+                          title: Text(
+                            'Details Koe ${item.koe}',
+                            style: const TextStyle(color: AppTheme.textPrimary),
+                          ),
                           content: Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildDetailText('Levensnummer:', item.levensnummer),
+                              _buildDetailText(
+                                'Levensnummer:',
+                                item.levensnummer,
+                              ),
                               _buildDetailText('aAa:', item.triple),
-                              _buildDetailText('Advies 1:', item.advies1, kiCode: item.kiCode1),
-                              _buildDetailText('Advies 2:', item.advies2, kiCode: item.kiCode2),
-                              _buildDetailText('Advies 3:', item.advies3, kiCode: item.kiCode3),
+                              _buildDetailText(
+                                'Advies 1:',
+                                item.advies1,
+                                kiCode: item.kiCode1,
+                              ),
+                              _buildDetailText(
+                                'Advies 2:',
+                                item.advies2,
+                                kiCode: item.kiCode2,
+                              ),
+                              _buildDetailText(
+                                'Advies 3:',
+                                item.advies3,
+                                kiCode: item.kiCode3,
+                              ),
                             ],
                           ),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(context),
-                              child: const Text('Sluiten', style: TextStyle(color: AppTheme.primary)),
+                              child: const Text(
+                                'Sluiten',
+                                style: TextStyle(color: AppTheme.primary),
+                              ),
                             ),
                           ],
                         ),
@@ -1403,19 +1718,31 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
                   context: context,
                   builder: (context) => AlertDialog(
                     backgroundColor: AppTheme.surface,
-                    title: const Text('Geschiedenis wissen', style: TextStyle(color: AppTheme.textPrimary)),
-                    content: const Text('Weet je zeker dat je alle zoekgeschiedenis wilt wissen?', style: TextStyle(color: AppTheme.textSecondary)),
+                    title: const Text(
+                      'Geschiedenis wissen',
+                      style: TextStyle(color: AppTheme.textPrimary),
+                    ),
+                    content: const Text(
+                      'Weet je zeker dat je alle zoekgeschiedenis wilt wissen?',
+                      style: TextStyle(color: AppTheme.textSecondary),
+                    ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
-                        child: const Text('Annuleren', style: TextStyle(color: AppTheme.textSecondary)),
+                        child: const Text(
+                          'Annuleren',
+                          style: TextStyle(color: AppTheme.textSecondary),
+                        ),
                       ),
                       TextButton(
                         onPressed: () {
                           Navigator.pop(context);
                           _clearGeschiedenis();
                         },
-                        child: const Text('Wissen', style: TextStyle(color: AppTheme.primary)),
+                        child: const Text(
+                          'Wissen',
+                          style: TextStyle(color: AppTheme.primary),
+                        ),
                       ),
                     ],
                   ),
@@ -1435,10 +1762,19 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
         children: [
           SizedBox(
             width: 80,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textSecondary)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textSecondary,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(color: AppTheme.textPrimary)),
+            child: Text(
+              value,
+              style: const TextStyle(color: AppTheme.textPrimary),
+            ),
           ),
           if (kiCode != null && kiCode.isNotEmpty && kiCode != '-')
             TextButton(
@@ -1489,7 +1825,7 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
   void _nieuwXmlSelecteren() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const StartScreen()),
+      MaterialPageRoute(builder: (context) => const LocatiesScreen()),
     );
   }
 
@@ -1505,7 +1841,10 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
                 children: [
                   Icon(Icons.favorite_border, size: 64, color: AppTheme.border),
                   const SizedBox(height: 16),
-                  const Text('Nog geen favorieten', style: TextStyle(color: AppTheme.textSecondary)),
+                  const Text(
+                    'Nog geen favorieten',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
                 ],
               ),
             )
@@ -1528,21 +1867,33 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
                     side: const BorderSide(color: AppTheme.border),
                   ),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 8,
+                    ),
                     leading: CircleAvatar(
                       backgroundColor: AppTheme.primary.withOpacity(0.1),
-                      child: const Icon(Icons.favorite, color: AppTheme.primary),
+                      child: const Icon(
+                        Icons.favorite,
+                        color: AppTheme.primary,
+                      ),
                     ),
                     title: Text(
                       'Koe: ${item.koe}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
                     ),
                     subtitle: Text(
                       'aAa: ${item.triple}',
                       style: const TextStyle(color: AppTheme.textSecondary),
                     ),
                     trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline, color: AppTheme.primary),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        color: AppTheme.primary,
+                      ),
                       onPressed: () => _removeFavoriet(item),
                     ),
                     onTap: () {
@@ -1550,22 +1901,43 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
                         context: context,
                         builder: (context) => AlertDialog(
                           backgroundColor: AppTheme.surface,
-                          title: Text('Details Koe ${item.koe}', style: const TextStyle(color: AppTheme.textPrimary)),
+                          title: Text(
+                            'Details Koe ${item.koe}',
+                            style: const TextStyle(color: AppTheme.textPrimary),
+                          ),
                           content: Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildDetailText('Levensnummer:', item.levensnummer),
+                              _buildDetailText(
+                                'Levensnummer:',
+                                item.levensnummer,
+                              ),
                               _buildDetailText('aAa:', item.triple),
-                              _buildDetailText('Advies 1:', item.advies1, kiCode: item.kiCode1),
-                              _buildDetailText('Advies 2:', item.advies2, kiCode: item.kiCode2),
-                              _buildDetailText('Advies 3:', item.advies3, kiCode: item.kiCode3),
+                              _buildDetailText(
+                                'Advies 1:',
+                                item.advies1,
+                                kiCode: item.kiCode1,
+                              ),
+                              _buildDetailText(
+                                'Advies 2:',
+                                item.advies2,
+                                kiCode: item.kiCode2,
+                              ),
+                              _buildDetailText(
+                                'Advies 3:',
+                                item.advies3,
+                                kiCode: item.kiCode3,
+                              ),
                             ],
                           ),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(context),
-                              child: const Text('Sluiten', style: TextStyle(color: AppTheme.primary)),
+                              child: const Text(
+                                'Sluiten',
+                                style: TextStyle(color: AppTheme.primary),
+                              ),
                             ),
                           ],
                         ),
@@ -1586,10 +1958,19 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
         children: [
           SizedBox(
             width: 80,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textSecondary)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textSecondary,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(color: AppTheme.textPrimary)),
+            child: Text(
+              value,
+              style: const TextStyle(color: AppTheme.textPrimary),
+            ),
           ),
           if (kiCode != null && kiCode.isNotEmpty && kiCode != '-')
             TextButton(
@@ -1613,12 +1994,17 @@ class StierInfoDialog extends StatefulWidget {
   final String kiCode;
   final String stierName;
 
-  const StierInfoDialog({super.key, required this.kiCode, required this.stierName});
+  const StierInfoDialog({
+    super.key,
+    required this.kiCode,
+    required this.stierName,
+  });
 
   static void show(BuildContext context, String kiCode, String stierName) {
     showDialog(
       context: context,
-      builder: (context) => StierInfoDialog(kiCode: kiCode, stierName: stierName),
+      builder: (context) =>
+          StierInfoDialog(kiCode: kiCode, stierName: stierName),
     );
   }
 
@@ -1640,23 +2026,31 @@ class _StierInfoDialogState extends State<StierInfoDialog> {
   Future<void> _fetchData() async {
     try {
       final code = widget.kiCode.replaceAll(' ', '');
-      
+
       HttpClient client = HttpClient();
-      client.badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
-      
-      HttpClientRequest request = await client.postUrl(Uri.parse('https://stierzoeken-api.cooperatie-crv.nl/indexes(\'bullinfo_apr2026_4\')/docs/search.post.search?api-version=2020-06-30'));
+      client.badCertificateCallback =
+          ((X509Certificate cert, String host, int port) => true);
+
+      HttpClientRequest request = await client.postUrl(
+        Uri.parse(
+          'https://stierzoeken-api.cooperatie-crv.nl/indexes(\'bullinfo_apr2026_4\')/docs/search.post.search?api-version=2020-06-30',
+        ),
+      );
       request.headers.set('Content-Type', 'application/json');
       request.headers.set('api-key', 'none');
       request.headers.set('Accept', 'application/json');
-      
-      request.write(jsonEncode({
-        "search": "$code*",
-        "select": "fullName,milkKilograms,percentageFat,percentageProtein,lifeSpan,fertility,udder,legwork",
-        "top": 1
-      }));
-      
+
+      request.write(
+        jsonEncode({
+          "search": "$code*",
+          "select":
+              "fullName,milkKilograms,percentageFat,percentageProtein,lifeSpan,fertility,udder,legwork",
+          "top": 1,
+        }),
+      );
+
       HttpClientResponse response = await request.close();
-      
+
       if (response.statusCode == 200) {
         String reply = await response.transform(utf8.decoder).join();
         if (mounted) {
@@ -1676,7 +2070,8 @@ class _StierInfoDialogState extends State<StierInfoDialog> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Kan stier gegevens niet laden.\nControleer uw internetverbinding.';
+          _error =
+              'Kan stier gegevens niet laden.\nControleer uw internetverbinding.';
           _isLoading = false;
         });
       }
@@ -1691,7 +2086,13 @@ class _StierInfoDialogState extends State<StierInfoDialog> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: AppTheme.textSecondary)),
-          Text(value.toString(), style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
+          Text(
+            value.toString(),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary,
+            ),
+          ),
         ],
       ),
     );
@@ -1701,7 +2102,10 @@ class _StierInfoDialogState extends State<StierInfoDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: AppTheme.surface,
-      title: Text('Fokwaarde stier: ${widget.stierName}', style: const TextStyle(color: AppTheme.textPrimary)),
+      title: Text(
+        'Fokwaarde stier: ${widget.stierName}',
+        style: const TextStyle(color: AppTheme.textPrimary),
+      ),
       content: SizedBox(
         width: double.maxFinite,
         child: _isLoading
@@ -1712,36 +2116,49 @@ class _StierInfoDialogState extends State<StierInfoDialog> {
                 ),
               )
             : _error != null
-                ? Text(_error!, style: const TextStyle(color: AppTheme.primary))
-                : SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildRow('Naam', _data?['fullName'] ?? widget.stierName),
-                        _buildRow('KI Code', widget.kiCode),
-                        const Divider(color: AppTheme.border, height: 20),
-                        const Text('Fokwaarden', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.primary)),
-                        const SizedBox(height: 8),
-                        if (_data != null && _data!.isEmpty)
-                          const Text('Geen verdere fokwaarden beschikbaar voor deze stier.', style: TextStyle(color: AppTheme.textSecondary))
-                        else ...[
-                          _buildRow('Melk (kg)', _data?['milkKilograms']),
-                          _buildRow('Vet %', _data?['percentageFat']),
-                          _buildRow('Eiwit %', _data?['percentageProtein']),
-                          _buildRow('LVD (Levensduur)', _data?['lifeSpan']),
-                          _buildRow('VRu (Vruchtbaarheid)', _data?['fertility']),
-                          _buildRow('U (Uier)', _data?['udder']),
-                          _buildRow('B (Beenwerk)', _data?['legwork']),
-                        ],
-                      ],
+            ? Text(_error!, style: const TextStyle(color: AppTheme.primary))
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildRow('Naam', _data?['fullName'] ?? widget.stierName),
+                    _buildRow('KI Code', widget.kiCode),
+                    const Divider(color: AppTheme.border, height: 20),
+                    const Text(
+                      'Fokwaarden',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppTheme.primary,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    if (_data != null && _data!.isEmpty)
+                      const Text(
+                        'Geen verdere fokwaarden beschikbaar voor deze stier.',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      )
+                    else ...[
+                      _buildRow('Melk (kg)', _data?['milkKilograms']),
+                      _buildRow('Vet %', _data?['percentageFat']),
+                      _buildRow('Eiwit %', _data?['percentageProtein']),
+                      _buildRow('LVD (Levensduur)', _data?['lifeSpan']),
+                      _buildRow('VRu (Vruchtbaarheid)', _data?['fertility']),
+                      _buildRow('U (Uier)', _data?['udder']),
+                      _buildRow('B (Beenwerk)', _data?['legwork']),
+                    ],
+                  ],
+                ),
+              ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Sluiten', style: TextStyle(color: AppTheme.primary)),
+          child: const Text(
+            'Sluiten',
+            style: TextStyle(color: AppTheme.primary),
+          ),
         ),
       ],
     );
