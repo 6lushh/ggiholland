@@ -1455,6 +1455,10 @@ class _SearchScreenState extends State<SearchScreen> {
                               ],
                             ),
                             const Divider(height: 24, color: AppTheme.border),
+                            _buildInfoRow(
+                              'Locatie:',
+                              _result!['locatieAlias'] ?? 'Onbekend',
+                            ),
                             _buildInfoRow('Koe nummer:', _result!['koe']),
                             _buildInfoRow(
                               'Levensnummer:',
@@ -1652,7 +1656,7 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
                       ),
                     ),
                     subtitle: Text(
-                      'aAa: ${item.triple}\nDatum: ${item.zoekDatum.day}-${item.zoekDatum.month}-${item.zoekDatum.year}',
+                      'Locatie: ${item.locatieAlias ?? "Onbekend"}\naAa: ${item.triple}\nDatum: ${item.zoekDatum.day}-${item.zoekDatum.month}-${item.zoekDatum.year}',
                       style: const TextStyle(color: AppTheme.textSecondary),
                     ),
                     trailing: const Icon(
@@ -1672,6 +1676,10 @@ class _GeschiedenisScreenState extends State<GeschiedenisScreen> {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              _buildDetailText(
+                                'Locatie',
+                                item.locatieAlias ?? 'Onbekend',
+                              ),
                               _buildDetailText(
                                 'Levensnummer:',
                                 item.levensnummer,
@@ -1886,7 +1894,7 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
                       ),
                     ),
                     subtitle: Text(
-                      'aAa: ${item.triple}',
+                      'Locatie: ${item.locatieAlias ?? "Onbekend"}\naAa: ${item.triple}',
                       style: const TextStyle(color: AppTheme.textSecondary),
                     ),
                     trailing: IconButton(
@@ -1909,6 +1917,10 @@ class _FavorietenScreenState extends State<FavorietenScreen> {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              _buildDetailText(
+                                'Locatie',
+                                item.locatieAlias ?? 'Onbekend',
+                              ),
                               _buildDetailText(
                                 'Levensnummer:',
                                 item.levensnummer,
