@@ -1144,8 +1144,6 @@ class _SearchScreenState extends State<SearchScreen> {
   Map<String, dynamic>? _result;
   bool _isFavoriet = false;
   OverlayEntry? _overlayEntry;
-  bool _searchByWerknummer = false;
-
   void _onSearchChanged(String query) {
     _hideDropdown();
 
@@ -1156,17 +1154,25 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    final String searchKey = _searchByWerknummer ? 'Werknummer' : 'CowNumber';
+    final matches = widget.xmlData.where((cow) {
+      final cowNum = cow['CowNumber'] ?? '';
+      final werkNum = cow['Werknummer'] ?? '';
+      return cowNum.contains(query) || werkNum.contains(query);
+    }).toList();
 
-    final matches = widget.xmlData
-        .where((cow) {
-          return cow[searchKey]?.startsWith(query) ?? false;
-        })
-        .take(5)
-        .toList();
+    // Sorteer zodat Halsband (CowNumber) eerst komt
+    matches.sort((a, b) {
+      final aCow = (a['CowNumber'] ?? '').contains(query);
+      final bCow = (b['CowNumber'] ?? '').contains(query);
+      if (aCow && !bCow) return -1;
+      if (!aCow && bCow) return 1;
+      return 0;
+    });
 
-    if (matches.isNotEmpty) {
-      _showDropdown(matches);
+    final topMatches = matches.take(5).toList();
+
+    if (topMatches.isNotEmpty) {
+      _showDropdown(topMatches);
     }
   }
 
@@ -1203,9 +1209,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 final match = matches[index];
                 return ListTile(
                   title: Text(
-                    _searchByWerknummer
-                        ? 'Werknummer: ${match['Werknummer']} (Halsband: ${match['CowNumber']})'
-                        : 'Halsband: ${match['CowNumber']} (Werknummer: ${match['Werknummer']})',
+                    '${match['CowNumber']} - ${match['Werknummer']}',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: AppTheme.textPrimary,
@@ -1217,9 +1221,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                   onTap: () {
                     _hideDropdown();
-                    _searchController.text = _searchByWerknummer
-                        ? match['Werknummer'] ?? ''
-                        : match['CowNumber'] ?? '';
+                    _searchController.text = match['CowNumber'] ?? '';
                     _selectCow(match);
                   },
                 );
@@ -1250,6 +1252,7 @@ class _SearchScreenState extends State<SearchScreen> {
       kiCode2: cow['AICodeBull2'],
       kiCode3: cow['AICodeBull3'],
       zoekDatum: DateTime.now(),
+      locatieAlias: cow['LocatieAlias'],
     );
 
     setState(() {
@@ -1311,30 +1314,6 @@ class _SearchScreenState extends State<SearchScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment<bool>(
-                        value: false,
-                        label: Text('Halsband'),
-                      ),
-                      ButtonSegment<bool>(
-                        value: true,
-                        label: Text('Werknummer'),
-                      ),
-                    ],
-                    selected: {_searchByWerknummer},
-                    onSelectionChanged: (Set<bool> newSelection) {
-                      setState(() {
-                        _searchByWerknummer = newSelection.first;
-                        _onSearchChanged(_searchController.text);
-                      });
-                    },
-                    style: SegmentedButton.styleFrom(
-                      selectedForegroundColor: AppTheme.textPrimary,
-                      selectedBackgroundColor: AppTheme.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   TextField(
                     key: _searchFieldKey,
                     controller: _searchController,
@@ -1343,15 +1322,11 @@ class _SearchScreenState extends State<SearchScreen> {
                     onChanged: _onSearchChanged,
                     style: const TextStyle(color: AppTheme.textPrimary),
                     decoration: InputDecoration(
-                      labelText: _searchByWerknummer
-                          ? 'Werknummer'
-                          : 'Halsband',
+                      labelText: 'Diernummer',
                       labelStyle: const TextStyle(
                         color: AppTheme.textSecondary,
                       ),
-                      hintText: _searchByWerknummer
-                          ? 'Begin met typen... (bijv. 6712)'
-                          : 'Begin met typen... (bijv. 77)',
+                      hintText: 'Begin met typen... (bijv. 77)',
                       hintStyle: const TextStyle(color: AppTheme.border),
                       prefixIcon: const Icon(
                         Icons.search,
@@ -1459,27 +1434,44 @@ class _SearchScreenState extends State<SearchScreen> {
                               'Locatie:',
                               _result!['locatieAlias'] ?? 'Onbekend',
                             ),
-                            _buildInfoRow('Koe nummer:', _result!['koe']),
+                            _buildInfoRow('aAa:', _result!['triple']),
                             _buildInfoRow(
                               'Levensnummer:',
                               _result!['levensnummer'],
                             ),
-                            _buildInfoRow('aAa:', _result!['triple']),
                             _buildInfoRow(
                               'Stier 1:',
                               _result!['advies1'],
                               kiCode: _result!['kiCode1'],
                             ),
+                            if (_result!['kiCode1'] != null &&
+                                _result!['kiCode1'].toString().isNotEmpty)
+                              _buildInfoRow(
+                                'aAa stier 1:',
+                                _result!['kiCode1'],
+                              ),
                             _buildInfoRow(
                               'Stier 2:',
                               _result!['advies2'],
                               kiCode: _result!['kiCode2'],
                             ),
+                            if (_result!['kiCode2'] != null &&
+                                _result!['kiCode2'].toString().isNotEmpty)
+                              _buildInfoRow(
+                                'aAa stier 2:',
+                                _result!['kiCode2'],
+                              ),
                             _buildInfoRow(
                               'Stier 3:',
                               _result!['advies3'],
                               kiCode: _result!['kiCode3'],
                             ),
+                            if (_result!['kiCode3'] != null &&
+                                _result!['kiCode3'].toString().isNotEmpty)
+                              _buildInfoRow(
+                                'aAa stier 3:',
+                                _result!['kiCode3'],
+                              ),
                           ],
                         ),
                       ),
@@ -2101,7 +2093,21 @@ class _StierInfoDialogState extends State<StierInfoDialog> {
   }
 
   Widget _buildRow(String label, dynamic value) {
-    if (value == null) return const SizedBox.shrink();
+    if (value == null || value.toString().isEmpty)
+      return const SizedBox.shrink();
+
+    String valStr = value.toString();
+    if (valStr.endsWith('.0')) {
+      valStr = valStr.substring(0, valStr.length - 2);
+    }
+
+    if ((label == 'Vet %' || label == 'Eiwit %') &&
+        valStr.isNotEmpty &&
+        !valStr.startsWith('-') &&
+        valStr != '0') {
+      valStr = '+$valStr';
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -2109,7 +2115,7 @@ class _StierInfoDialogState extends State<StierInfoDialog> {
         children: [
           Text(label, style: const TextStyle(color: AppTheme.textSecondary)),
           Text(
-            value.toString(),
+            valStr,
             style: const TextStyle(
               fontWeight: FontWeight.bold,
               color: AppTheme.textPrimary,
