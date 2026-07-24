@@ -1453,7 +1453,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             if (_result!['kiCode1'] != null &&
                                 _result!['kiCode1'].toString().isNotEmpty)
                               _buildInfoRow(
-                                'aAa stier 1:',
+                                'KI code stier 1:',
                                 _result!['kiCode1'],
                               ),
                             _buildInfoRow(
@@ -1464,7 +1464,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             if (_result!['kiCode2'] != null &&
                                 _result!['kiCode2'].toString().isNotEmpty)
                               _buildInfoRow(
-                                'aAa stier 2:',
+                                'KI code stier 2:',
                                 _result!['kiCode2'],
                               ),
                             _buildInfoRow(
@@ -1475,7 +1475,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             if (_result!['kiCode3'] != null &&
                                 _result!['kiCode3'].toString().isNotEmpty)
                               _buildInfoRow(
-                                'aAa stier 3:',
+                                'KI code stier 3:',
                                 _result!['kiCode3'],
                               ),
                           ],
