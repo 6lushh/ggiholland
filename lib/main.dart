@@ -1207,16 +1207,22 @@ class _SearchScreenState extends State<SearchScreen> {
                   const Divider(height: 1, color: AppTheme.border),
               itemBuilder: (context, index) {
                 final match = matches[index];
+                final cowNum = match['CowNumber'] ?? '';
+                final werkNum = match['Werknummer'] ?? '';
+                final titleText = cowNum.isNotEmpty && werkNum.isNotEmpty
+                    ? '$cowNum - $werkNum'
+                    : '$cowNum$werkNum';
+
                 return ListTile(
                   title: Text(
-                    '${match['CowNumber']} - ${match['Werknummer']}',
+                    titleText,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: AppTheme.textPrimary,
                     ),
                   ),
                   subtitle: Text(
-                    'Stier: ${match['Sire']}',
+                    'aAa: ${match['Triple'] ?? "Onbekend"}',
                     style: const TextStyle(color: AppTheme.textSecondary),
                   ),
                   onTap: () {
